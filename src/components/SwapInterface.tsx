@@ -2,11 +2,9 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowDownUp, Loader2 } from 'lucide-react';
-import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
-import { useSignAndSendTransaction } from '@privy-io/react-auth/solana';
+import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
-import { VersionedTransaction } from '@solana/web3.js';
 
 interface SwapInterfaceProps {
   address: string;
@@ -17,8 +15,11 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [isSwapping, setIsSwapping] = useState(false);
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [quote, setQuote] = useState<any>(null);
-  const { wallet } = useEmbeddedSolWallet();
+  const { wallets } = useWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
+  
+  // Get the embedded wallet (first wallet which is the Privy embedded one)
+  const wallet = wallets[0];
 
   // Fetch quote when amount changes using Raydium API
   useEffect(() => {
@@ -102,22 +103,17 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
 
       const transactionBuf = Uint8Array.from(atob(swapData.data[0].transaction), c => c.charCodeAt(0));
 
-      console.log('📝 Transaction prepared, signing and sending via Privy...');
+      console.log('📝 Transaction prepared, sending via Privy...');
 
       toast.loading('Sending transaction...', { id: 'swap' });
 
-      // Send transaction via Privy's signAndSendTransaction
+      // Send transaction using Privy's signAndSendTransaction
       const receipt = await signAndSendTransaction({
         transaction: transactionBuf,
-        wallet: {
-          address: address,
-          chainType: 'solana',
-          walletClientType: 'privy',
-        } as any,
+        wallet: wallet,
       });
 
-      const signature = receipt.signature;
-      console.log('✅ Transaction sent:', signature);
+      console.log('✅ Transaction sent:', receipt.signature);
 
       // Transaction is already confirmed by Privy
       toast.success('Swap successful!', {
@@ -125,7 +121,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         description: `Swapped ${amount} SOL to $TRAPANI`,
         action: {
           label: 'View',
-          onClick: () => window.open(`https://solscan.io/tx/${signature}`, '_blank'),
+          onClick: () => window.open(`https://solscan.io/tx/${receipt.signature}`, '_blank'),
         },
       });
 
