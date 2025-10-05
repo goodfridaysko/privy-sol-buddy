@@ -1,5 +1,6 @@
 import { useBalance } from '@/hooks/useBalance';
 import { Coins, Loader2 } from 'lucide-react';
+import trapaniIcon from '@/assets/trapani-coin.png';
 
 interface TokenListProps {
   address: string;
@@ -8,7 +9,7 @@ interface TokenListProps {
 export function TokenList({ address }: TokenListProps) {
   const { data: balance = 0, isLoading, error } = useBalance(address);
 
-  // In a real app, you'd fetch all tokens from the wallet
+  // Token list with SOL and Trapani coin
   const tokens = [
     {
       symbol: 'SOL',
@@ -16,7 +17,18 @@ export function TokenList({ address }: TokenListProps) {
       balance: balance,
       usdValue: balance * 150,
       icon: '◎',
+      iconType: 'text' as const,
       change24h: 5.2,
+    },
+    {
+      symbol: 'TRAPANI',
+      name: 'Ray Trapani',
+      balance: 0, // Will be fetched from blockchain
+      usdValue: 0,
+      icon: trapaniIcon,
+      iconType: 'image' as const,
+      change24h: 0,
+      address: 'Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump',
     },
   ];
 
@@ -46,8 +58,12 @@ export function TokenList({ address }: TokenListProps) {
             className="flex items-center justify-between p-4 rounded-lg bg-card hover:bg-muted/50 transition-colors cursor-pointer border border-border"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-primary shadow-glow flex items-center justify-center text-xl">
-                {token.icon}
+              <div className="w-10 h-10 rounded-full bg-gradient-primary shadow-glow flex items-center justify-center text-xl overflow-hidden">
+                {token.iconType === 'image' ? (
+                  <img src={token.icon as string} alt={token.symbol} className="w-full h-full object-cover" />
+                ) : (
+                  token.icon
+                )}
               </div>
               <div>
                 <p className="font-semibold">{token.symbol}</p>
@@ -70,15 +86,6 @@ export function TokenList({ address }: TokenListProps) {
         ))}
       </div>
 
-      {tokens.length === 1 && (
-        <div className="mt-8 text-center py-8">
-          <Coins className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-          <p className="text-muted-foreground">No other tokens yet</p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Receive or swap to add more tokens
-          </p>
-        </div>
-      )}
     </div>
   );
 }
