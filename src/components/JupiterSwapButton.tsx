@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowDownUp } from 'lucide-react';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
+import { useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { PublicKey } from '@solana/web3.js';
@@ -14,6 +15,7 @@ interface JupiterSwapButtonProps {
 export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
   const [isPluginReady, setIsPluginReady] = useState(false);
   const { wallet } = useEmbeddedSolWallet();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
   const pluginInitialized = useRef(false);
 
   useEffect(() => {
@@ -43,31 +45,47 @@ export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
     console.log('🚀 Initializing Jupiter Plugin with wallet:', address);
 
     try {
-      // Create PublicKey with proper Wallet Adapter interface
+      // Create PublicKey for Solana Wallet Adapter compatibility
       const publicKey = new PublicKey(address);
       
-      // Create Solana Wallet Adapter compatible wallet object
+      // Create Solana Wallet Adapter compatible wallet using Privy's signAndSendTransaction
       const walletAdapter = {
         publicKey,
         signTransaction: async (transaction: any) => {
-          console.log('🖊️ Jupiter requesting transaction signature');
+          console.log('🖊️ Jupiter requesting transaction signature via Privy');
           try {
-            const serialized = transaction.serialize({ requireAllSignatures: false });
-            console.log('📝 Signing with Privy wallet:', wallet);
-            await wallet.sendTransaction(serialized);
+            // Serialize the transaction to Uint8Array for Privy
+            const serialized = transaction.serialize({
+              requireAllSignatures: false,
+              verifySignatures: false,
+            });
+            
+            // Use Privy's signAndSendTransaction hook
+            const receipt = await signAndSendTransaction({
+              transaction: serialized,
+              wallet: wallet,
+            });
+            
+            console.log('✅ Transaction signed and sent:', receipt.signature);
             return transaction;
           } catch (error) {
-            console.error('❌ Sign error:', error);
+            console.error('❌ Transaction signing failed:', error);
             throw error;
           }
         },
         signAllTransactions: async (transactions: any[]) => {
-          console.log('🖊️ Signing multiple transactions');
-          return Promise.all(transactions.map(tx => walletAdapter.signTransaction(tx)));
+          console.log('🖊️ Signing multiple transactions via Privy');
+          // Sign transactions sequentially
+          const signedTxs = [];
+          for (const tx of transactions) {
+            const signedTx = await walletAdapter.signTransaction(tx);
+            signedTxs.push(signedTx);
+          }
+          return signedTxs;
         },
       };
       
-      // Initialize Jupiter Plugin with proper wallet context
+      // Initialize Jupiter Plugin with Privy wallet passthrough
       window.Jupiter.init({
         displayMode: 'modal',
         endpoint: 'https://api.mainnet-beta.solana.com',
