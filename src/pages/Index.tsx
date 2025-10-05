@@ -21,6 +21,15 @@ const Index = () => {
   const { address, hasWallet, isLoading } = useEmbeddedSolWallet();
   const { fundWallet } = useFund();
   
+  console.log('🎯 Index state:', {
+    ready,
+    authenticated,
+    hasWallet,
+    address,
+    isLoading,
+    user: user?.email?.address
+  });
+  
   const [sendOpen, setSendOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);

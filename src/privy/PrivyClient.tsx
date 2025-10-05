@@ -16,6 +16,11 @@ interface PrivyClientProps {
 export function PrivyClient({ children }: PrivyClientProps) {
   const appId = import.meta.env.VITE_PRIVY_APP_ID;
 
+  console.log('🔧 Privy Config:', {
+    appId: appId ? '✅ Set' : '❌ Missing',
+    env: import.meta.env.MODE
+  });
+
   // Show setup instructions if App ID is not configured
   if (!appId || appId === 'your-privy-app-id') {
     return <PrivySetup />;
