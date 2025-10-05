@@ -1,4 +1,4 @@
-import { useFundWallet } from '@privy-io/react-auth/solana';
+import { useFundWallet } from '@privy-io/react-auth';
 
 /**
  * useFund: Wrapper for Privy's Solana funding flow with MoonPay
@@ -18,6 +18,7 @@ export function useFund() {
       console.log('🚀 Opening MoonPay funding flow for Solana wallet:', address);
       
       // Open MoonPay for Solana (test mode configured in PrivyProvider)
+      // Privy should auto-detect it's a Solana address
       await fundWallet({ address });
       
       console.log('✅ MoonPay modal opened successfully');
