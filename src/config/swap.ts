@@ -1,5 +1,5 @@
 /**
- * Swap Configuration
+ * Swap Configuration - Jupiter V6 API
  * 
  * Update TRAPANI_MINT with your actual token mint address
  */

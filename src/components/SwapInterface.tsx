@@ -25,7 +25,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   // Get the embedded wallet (first wallet is the Privy embedded wallet)
   const wallet = wallets?.[0];
 
-  // Fetch quote function
+  // Fetch quote from Jupiter
   const fetchQuote = useCallback(async () => {
     if (!amount || parseFloat(amount) <= 0) {
       setQuote(null);
@@ -37,7 +37,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       const lamports = Math.floor(parseFloat(amount) * 1e9);
       
       const response = await fetch(
-        `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50&txVersion=V0`
+        `https://quote-api.jup.ag/v6/quote?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50`
       );
       
       if (!response.ok) {
@@ -45,7 +45,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       }
       
       const data = await response.json();
-      console.log('📊 Quote:', data);
+      console.log('📊 Jupiter quote:', data);
       setQuote(data);
       setQuoteTimestamp(Date.now());
     } catch (error) {
@@ -93,40 +93,51 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     toast.loading('Preparing swap...', { id: 'swap' });
 
     try {
-      const priorityFee = '10000';
-
-      const swapResponse = await fetch('https://transaction-v1.raydium.io/transaction/swap-base-in', {
+      console.log('🔄 Building swap transaction with Jupiter...');
+      
+      // Get swap transaction from Jupiter
+      const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          computeUnitPriceMicroLamports: priorityFee,
-          swapResponse: quote,
-          txVersion: 'V0',
-          wallet: address,
-          wrapSol: true,
-          unwrapSol: false,
+          quoteResponse: quote,
+          userPublicKey: address,
+          wrapAndUnwrapSol: true,
+          dynamicComputeUnitLimit: true,
+          priorityLevelWithMaxLamports: {
+            maxLamports: 10000000,
+            priorityLevel: "high"
+          }
         }),
       });
 
       if (!swapResponse.ok) {
-        throw new Error('Failed to build transaction');
+        const errorText = await swapResponse.text();
+        console.error('Jupiter swap error:', errorText);
+        throw new Error('Failed to build swap transaction');
       }
 
-      const swapData = await swapResponse.json();
+      const { swapTransaction } = await swapResponse.json();
       
-      if (!swapData.success || !swapData.data?.[0]?.transaction) {
-        throw new Error('Invalid transaction response');
+      if (!swapTransaction) {
+        throw new Error('No transaction returned from Jupiter');
       }
 
-      const transactionBuf = Uint8Array.from(atob(swapData.data[0].transaction), c => c.charCodeAt(0));
+      console.log('📝 Transaction received, deserializing...');
+      
+      // Decode base64 transaction
+      const transactionBuf = Uint8Array.from(atob(swapTransaction), c => c.charCodeAt(0));
       const transaction = VersionedTransaction.deserialize(transactionBuf);
 
+      console.log('✍️ Signing and sending transaction...');
       toast.loading('Signing transaction...', { id: 'swap' });
 
       const receipt = await signAndSendTransaction({
         transaction: transaction.serialize(),
         wallet: wallet,
       });
+
+      console.log('✅ Swap successful!', receipt.signature);
 
       toast.success('Swap successful!', {
         id: 'swap',
@@ -140,7 +151,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       setAmount('0.01');
       setQuote(null);
     } catch (error: any) {
-      console.error('Swap error:', error);
+      console.error('❌ Swap failed:', error);
       toast.error('Swap failed', {
         id: 'swap',
         description: error?.message || 'Please try again',
@@ -150,22 +161,22 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     }
   };
 
-  // Calculate display values
-  const outputAmount = quote?.data
-    ? (parseInt(quote.data.outputAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  // Calculate display values (Jupiter format)
+  const outputAmount = quote?.outAmount
+    ? (parseInt(quote.outAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
-  const exchangeRate = quote?.data
-    ? (parseInt(quote.data.outputAmount) / parseInt(quote.data.inputAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const exchangeRate = quote?.outAmount && quote?.inAmount
+    ? (parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
-  const priceImpact = quote?.data?.priceImpactPct
-    ? parseFloat(quote.data.priceImpactPct)
+  const priceImpact = quote?.priceImpactPct
+    ? parseFloat(quote.priceImpactPct)
     : null;
 
   const inputUSD = prices.sol * parseFloat(amount || '0');
-  const outputUSD = quote?.data 
-    ? prices.trapani * (parseInt(quote.data.outputAmount) / 1e5)
+  const outputUSD = quote?.outAmount 
+    ? prices.trapani * (parseInt(quote.outAmount) / 1e5)
     : 0;
 
   const quoteAge = Date.now() - quoteTimestamp;
