@@ -8,6 +8,7 @@ import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { useBalance } from '@/hooks/useBalance';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
+import { useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number; outAmount: number }) => void;
@@ -16,6 +17,7 @@ interface SwapPanelProps {
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { address, wallet } = useEmbeddedSolWallet();
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
+  const { signAndSendTransaction } = useSignAndSendTransaction();
   
   const [inputAmount, setInputAmount] = useState('0.01');
   const [quote, setQuote] = useState<JupiterQuoteResponse | null>(null);
@@ -68,13 +70,25 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       const transaction = await buildJupiterSwap(quote, address);
 
       toast.info('Please sign the transaction...');
-      const signature = await wallet.signAndSendTransaction(transaction);
+      
+      // Serialize the transaction for Privy
+      const serializedTransaction = transaction.serialize();
+      
+      const receipt = await signAndSendTransaction({
+        transaction: serializedTransaction,
+        wallet: wallet as any, // Privy wallet type
+      });
 
       toast.success('Swap successful!');
       
+      // Convert signature to string (it's returned as Uint8Array from Privy)
+      const signatureString = typeof receipt.signature === 'string' 
+        ? receipt.signature 
+        : Buffer.from(receipt.signature).toString('base64');
+      
       if (onSwapResult) {
         onSwapResult({
-          signature,
+          signature: signatureString,
           inAmount: parseInt(quote.inAmount) / 1e9,
           outAmount: parseInt(quote.outAmount),
         });
