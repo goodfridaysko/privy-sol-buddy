@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowDownUp } from 'lucide-react';
-import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
-import { useSignAndSendTransaction } from '@privy-io/react-auth/solana';
+import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { PublicKey } from '@solana/web3.js';
@@ -14,9 +13,12 @@ interface JupiterSwapButtonProps {
 
 export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
   const [isPluginReady, setIsPluginReady] = useState(false);
-  const { wallet } = useEmbeddedSolWallet();
+  const { wallets } = useWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
   const pluginInitialized = useRef(false);
+  
+  // Get the Solana wallet from Privy
+  const privyWallet = wallets.find((w: any) => w.chainType === 'solana');
 
   useEffect(() => {
     // Wait for Jupiter plugin to load
@@ -37,12 +39,13 @@ export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
       return;
     }
 
-    if (!wallet || !address) {
+    if (!privyWallet || !address) {
       toast.error('Wallet not connected');
+      console.error('Privy wallet not found:', { privyWallet, address, wallets });
       return;
     }
 
-    console.log('🚀 Initializing Jupiter Plugin with wallet:', address);
+    console.log('🚀 Initializing Jupiter Plugin with wallet:', address, privyWallet);
 
     try {
       // Create PublicKey for Solana Wallet Adapter compatibility
@@ -60,10 +63,10 @@ export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
               verifySignatures: false,
             });
             
-            // Use Privy's signAndSendTransaction hook
+            // Use Privy's signAndSendTransaction hook with the correct wallet
             const receipt = await signAndSendTransaction({
               transaction: serialized,
-              wallet: wallet,
+              wallet: privyWallet,
             });
             
             console.log('✅ Transaction signed and sent:', receipt.signature);
