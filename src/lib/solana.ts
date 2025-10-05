@@ -17,6 +17,34 @@ export const connection = new Connection(PRIMARY_RPC, 'confirmed');
 export const fallbackConnection = new Connection(FALLBACK_RPC, 'confirmed');
 
 /**
+ * Get a Connection instance
+ */
+export function getConnection(rpcUrl: string = PRIMARY_RPC): Connection {
+  return new Connection(rpcUrl, 'confirmed');
+}
+
+/**
+ * Convert SOL to lamports (alias for solToLamports)
+ */
+export function toLamports(sol: number): bigint {
+  return BigInt(Math.floor(sol * LAMPORTS_PER_SOL));
+}
+
+/**
+ * Convert lamports to SOL (alias for lamportsToSol)
+ */
+export function toSOL(lamports: number | bigint): number {
+  return Number(lamports) / LAMPORTS_PER_SOL;
+}
+
+/**
+ * Deserialize transaction (alias for deserializeTransaction)
+ */
+export function deserializeTx(base64Tx: string): VersionedTransaction {
+  return deserializeTransaction(base64Tx);
+}
+
+/**
  * Convert SOL to lamports (1 SOL = 1,000,000,000 lamports)
  */
 export function solToLamports(sol: number): number {
