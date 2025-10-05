@@ -27,10 +27,10 @@ export function usePrices() {
 
         // Fetch TRAPANI price from Jupiter Price API v2
         const trapaniResponse = await fetch(
-          `https://api.jup.ag/price/v2?ids=DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263`
+          `https://api.jup.ag/price/v2?ids=Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump`
         );
         const trapaniData = await trapaniResponse.json();
-        const trapaniPrice = trapaniData?.data?.['DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263']?.price || 0;
+        const trapaniPrice = trapaniData?.data?.['Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump']?.price || 0;
 
         setPrices({
           sol: solPrice,

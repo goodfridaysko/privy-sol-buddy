@@ -4,7 +4,7 @@
  * Update TRAPANI_MINT with your actual token mint address
  */
 
-export const TRAPANI_MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263';
+export const TRAPANI_MINT = 'Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump';
 
 export const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
