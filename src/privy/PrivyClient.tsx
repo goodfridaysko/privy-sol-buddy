@@ -1,5 +1,5 @@
 import { PrivyProvider } from '@privy-io/react-auth';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { PrivySetup } from '@/components/PrivySetup';
 
 interface PrivyClientProps {
@@ -16,10 +16,15 @@ interface PrivyClientProps {
 export function PrivyClient({ children }: PrivyClientProps) {
   const appId = import.meta.env.VITE_PRIVY_APP_ID;
 
-  console.log('🔧 Privy Config:', {
-    appId: appId ? '✅ Set' : '❌ Missing',
-    env: import.meta.env.MODE
-  });
+  useEffect(() => {
+    console.log('🔧 Privy Config:', {
+      appId: appId ? '✅ Set' : '❌ Missing',
+      env: import.meta.env.MODE,
+      origin: window.location.origin
+    });
+    console.log('📋 Add this URL to Privy Dashboard > Settings > Domains:');
+    console.log('   ', window.location.origin);
+  }, [appId]);
 
   // Show setup instructions if App ID is not configured
   if (!appId || appId === 'your-privy-app-id') {
