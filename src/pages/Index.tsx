@@ -12,7 +12,7 @@ import { ActionButtons } from '@/components/wallet/ActionButtons';
 import { TokenList } from '@/components/wallet/TokenList';
 import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
-import { JupiterSwapButton } from '@/components/JupiterSwapButton';
+import { SwapInterface } from '@/components/SwapInterface';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
 import { MoonPayModal } from '@/components/MoonPayModal';
 import { Wallet, Loader2, Image, CreditCard } from 'lucide-react';
@@ -163,14 +163,16 @@ const Index = () => {
             size="lg"
             className="w-full bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow text-lg font-semibold h-14"
           >
-            <CreditCard className="mr-2 h-6 w-6" />
+          <CreditCard className="mr-2 h-6 w-6" />
             Buy Crypto with Card
           </Button>
-          <JupiterSwapButton address={address} />
           <p className="text-xs text-center text-muted-foreground">
-            Powered by MoonPay & Jupiter • Test Mode Active
+            Powered by MoonPay • Test Mode Active
           </p>
         </div>
+
+        {/* Swap Interface */}
+        <SwapInterface address={address} />
 
         {/* Action Buttons */}
         <ActionButtons
