@@ -1,4 +1,4 @@
-import { JUPITER_API_URL } from '@/config/swap';
+import { JUPITER_API_ENDPOINTS } from '@/config/swap';
 
 // Jupiter API supports CORS for browser requests
 const USE_PROXY = false;
@@ -57,70 +57,74 @@ export interface SwapResponse {
 export async function getQuote(params: QuoteParams): Promise<QuoteResponse> {
   const { inputMint, outputMint, amount, slippageBps } = params;
 
-  const maxRetries = 3;
+  const maxRetries = 2; // Reduced retries since we're trying multiple endpoints
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // Direct API call - Jupiter supports CORS
-      const url = new URL(`${JUPITER_API_URL}/quote`);
-      url.searchParams.append('inputMint', inputMint);
-      url.searchParams.append('outputMint', outputMint);
-      url.searchParams.append('amount', amount.toString());
-      url.searchParams.append('slippageBps', slippageBps.toString());
-      url.searchParams.append('onlyDirectRoutes', 'false');
-      url.searchParams.append('asLegacyTransaction', 'false');
+  // Try each Jupiter API endpoint
+  for (const apiEndpoint of JUPITER_API_ENDPOINTS) {
+    console.log(`🔍 Trying Jupiter endpoint: ${apiEndpoint}`);
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // Direct API call - Jupiter supports CORS
+        const url = new URL(`${apiEndpoint}/quote`);
+        url.searchParams.append('inputMint', inputMint);
+        url.searchParams.append('outputMint', outputMint);
+        url.searchParams.append('amount', amount.toString());
+        url.searchParams.append('slippageBps', slippageBps.toString());
+        url.searchParams.append('onlyDirectRoutes', 'false');
+        url.searchParams.append('asLegacyTransaction', 'false');
 
-      console.log('🔍 Fetching Jupiter quote, attempt', attempt + 1);
-      console.log('URL:', url.toString());
+        console.log(`🔍 Fetching quote, attempt ${attempt + 1}`);
 
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        mode: 'cors',
-      }).catch(err => {
-        console.error('Fetch error:', err);
-        throw new Error(`Network error: ${err.message}`);
-      });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-      console.log('Response status:', response.status);
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+          mode: 'cors',
+          signal: controller.signal,
+        }).catch(err => {
+          console.error('Fetch error:', err);
+          throw new Error(`Network error: ${err.message}`);
+        }).finally(() => {
+          clearTimeout(timeoutId);
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Response error:', errorText);
-        throw new Error(`Jupiter quote API error: ${response.status} ${errorText}`);
-      }
+        console.log('Response status:', response.status);
 
-      const data = await response.json();
-      console.log('Quote data received:', data);
-      
-      if (!data.outAmount || data.outAmount === '0') {
-        throw new Error('No valid route found for this swap');
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Response error:', errorText);
+          throw new Error(`API error: ${response.status}`);
+        }
 
-      console.log('✅ Quote received successfully');
-      return data as QuoteResponse;
-    } catch (error) {
-      lastError = error as Error;
-      console.error(`❌ Quote attempt ${attempt + 1} failed:`, error);
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
-      
-      if (attempt < maxRetries - 1) {
-        const waitTime = 1000 * Math.pow(2, attempt);
-        console.log(`⏳ Retrying in ${waitTime}ms...`);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
+        const data = await response.json();
+        
+        if (!data.outAmount || data.outAmount === '0') {
+          throw new Error('No valid route found');
+        }
+
+        console.log('✅ Quote received successfully from', apiEndpoint);
+        return data as QuoteResponse;
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`❌ Attempt ${attempt + 1} failed for ${apiEndpoint}:`, error.message);
+        
+        if (attempt < maxRetries - 1) {
+          const waitTime = 1000;
+          console.log(`⏳ Retrying in ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
       }
     }
   }
 
-  console.error('❌ All retry attempts failed');
-  throw lastError || new Error('Failed to get quote after retries');
+  console.error('❌ All endpoints and retries failed');
+  throw new Error('Unable to connect to Jupiter API. Please check your network connection.');
 }
 
 /**
@@ -136,52 +140,64 @@ export async function buildSwapTransaction(params: SwapParams): Promise<SwapResp
     prioritizationFeeLamports,
   } = params;
 
-  const maxRetries = 3;
+  const maxRetries = 2;
   let lastError: Error | null = null;
 
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      // Direct API call - Jupiter supports CORS
-      console.log('🔄 Building swap transaction...');
-      const response = await fetch(`${JUPITER_API_URL}/swap`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          quoteResponse,
-          userPublicKey,
-          wrapAndUnwrapSol,
-          dynamicComputeUnitLimit,
-          prioritizationFeeLamports,
-        }),
-      });
+  // Try each Jupiter API endpoint
+  for (const apiEndpoint of JUPITER_API_ENDPOINTS) {
+    console.log(`🔄 Trying swap endpoint: ${apiEndpoint}`);
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Jupiter swap API error: ${response.status} ${errorText}`);
-      }
+        const response = await fetch(`${apiEndpoint}/swap`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            quoteResponse,
+            userPublicKey,
+            wrapAndUnwrapSol,
+            dynamicComputeUnitLimit,
+            prioritizationFeeLamports,
+          }),
+          mode: 'cors',
+          signal: controller.signal,
+        }).catch(err => {
+          throw new Error(`Network error: ${err.message}`);
+        }).finally(() => {
+          clearTimeout(timeoutId);
+        });
 
-      const data = await response.json();
-      
-      if (!data.swapTransaction) {
-        throw new Error('No transaction returned from Jupiter');
-      }
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error: ${response.status}`);
+        }
 
-      console.log('✅ Swap transaction built successfully');
-      return data as SwapResponse;
-    } catch (error) {
-      lastError = error as Error;
-      console.error(`Swap transaction build attempt ${attempt + 1} failed:`, error);
-      
-      if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        const data = await response.json();
+        
+        if (!data.swapTransaction) {
+          throw new Error('No transaction returned');
+        }
+
+        console.log('✅ Swap transaction built from', apiEndpoint);
+        return data as SwapResponse;
+      } catch (error) {
+        lastError = error as Error;
+        console.error(`❌ Attempt ${attempt + 1} failed for ${apiEndpoint}:`, error.message);
+        
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
     }
   }
 
-  throw lastError || new Error('Failed to build swap transaction after retries');
+  throw new Error('Unable to connect to Jupiter API. Please check your network connection.');
 }
 
 /**

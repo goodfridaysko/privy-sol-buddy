@@ -12,7 +12,12 @@ export const SLIPPAGE_BPS = 50; // 0.5%
 
 export const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
-export const JUPITER_API_URL = 'https://quote-api.jup.ag/v6';
+// Jupiter API endpoints with fallbacks
+export const JUPITER_API_ENDPOINTS = [
+  'https://quote-api.jup.ag/v6',
+  'https://api.jup.ag/v6', // Alternative endpoint
+  'https://public.jupiterapi.com/v6', // Public endpoint
+];
 
 export const MIN_SOL_AMOUNT = 0.001; // Minimum swap amount in SOL
 
