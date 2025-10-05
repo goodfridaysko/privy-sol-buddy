@@ -26,16 +26,25 @@ serve(async (req) => {
       throw new Error('MoonPay secret key not configured');
     }
 
-    // Build query parameters
-    const params = new URLSearchParams({
+    // Build query parameters with sorted keys to ensure consistent ordering
+    // MoonPay requires all parameter VALUES to be URL-encoded before signing
+    const params: Record<string, string> = {
       apiKey: MOONPAY_API_KEY,
-      currencyCode: 'sol',
-      walletAddress: walletAddress,
       colorCode: '9333ea',
+      currencyCode: 'sol',
       showWalletAddressForm: 'false',
-    });
+      walletAddress: walletAddress,
+    };
 
-    const queryString = params.toString();
+    // Sort keys alphabetically and build query string manually
+    const sortedKeys = Object.keys(params).sort();
+    const queryParts = sortedKeys.map(key => {
+      const encodedValue = encodeURIComponent(params[key]);
+      return `${key}=${encodedValue}`;
+    });
+    const queryString = queryParts.join('&');
+    
+    console.log('📝 Query string to sign:', queryString);
     
     // Create HMAC signature using Web Crypto API
     const encoder = new TextEncoder();
@@ -52,12 +61,14 @@ serve(async (req) => {
     
     const signatureBuffer = await crypto.subtle.sign('HMAC', key, messageData);
     const signatureArray = Array.from(new Uint8Array(signatureBuffer));
-    const signature = btoa(String.fromCharCode(...signatureArray));
+    const signatureBase64 = btoa(String.fromCharCode(...signatureArray));
 
-    // Build signed URL
-    const signedUrl = `https://buy-sandbox.moonpay.com/?${queryString}&signature=${encodeURIComponent(signature)}`;
+    // URL-encode the signature and append to URL
+    const encodedSignature = encodeURIComponent(signatureBase64);
+    const signedUrl = `https://buy-sandbox.moonpay.com/?${queryString}&signature=${encodedSignature}`;
 
     console.log('🔐 Signed MoonPay URL for wallet:', walletAddress);
+    console.log('✅ Signature generated:', signatureBase64.substring(0, 20) + '...');
 
     return new Response(
       JSON.stringify({ url: signedUrl }),
