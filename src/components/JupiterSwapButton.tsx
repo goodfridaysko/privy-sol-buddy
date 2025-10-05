@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
+import { toast } from 'sonner';
 
 declare global {
   interface Window {
@@ -17,6 +18,7 @@ export function JupiterSwapButton() {
   const { wallets } = useWallets();
   const solanaWallet = wallets[0];
   const scriptLoaded = useRef(false);
+  const jupiterInitialized = useRef(false);
 
   useEffect(() => {
     if (scriptLoaded.current) return;
@@ -38,36 +40,52 @@ export function JupiterSwapButton() {
     };
   }, []);
 
-  const handleSwap = () => {
+  const handleSwap = async () => {
     if (!window.Jupiter || !solanaWallet) {
-      console.error('[Jupiter Terminal] Not ready');
+      toast.error('Please wait, loading swap interface...');
       return;
     }
 
-    console.log('[Jupiter Terminal] Opening swap widget for wallet:', solanaWallet.address);
+    console.log('[Jupiter Terminal] Opening swap widget');
+    console.log('[Jupiter Terminal] Using Privy wallet:', solanaWallet.address);
 
-    window.Jupiter.init({
-      displayMode: 'modal',
-      integratedTargetId: 'integrated-terminal',
-      endpoint: 'https://api.mainnet-beta.solana.com',
-      platformFeeAndAccounts: undefined,
-      strictTokenList: false,
-      defaultExplorer: 'Solscan',
-      formProps: {
-        initialInputMint: SOL_MINT,
-        initialOutputMint: TRAPANI_MINT,
-        initialAmount: '10000000', // 0.01 SOL in lamports
-      },
-      onSuccess: ({ txid }: { txid: string }) => {
-        console.log('[Jupiter Terminal] Swap successful:', txid);
-      },
-      onSwapError: ({ error }: { error: any }) => {
-        console.error('[Jupiter Terminal] Swap error:', error);
-      },
-    });
+    try {
+      // Initialize Jupiter Terminal with Privy wallet
+      window.Jupiter.init({
+        displayMode: 'modal',
+        integratedTargetId: 'integrated-terminal',
+        endpoint: 'https://api.mainnet-beta.solana.com',
+        
+        // Pre-configure the swap
+        formProps: {
+          initialInputMint: SOL_MINT,
+          initialOutputMint: TRAPANI_MINT,
+          initialAmount: '10000000', // 0.01 SOL
+        },
+        
+        // Pass Privy wallet
+        passThroughWallet: solanaWallet,
+        
+        // Callbacks
+        onSuccess: ({ txid }: { txid: string }) => {
+          console.log('[Jupiter Terminal] Swap successful:', txid);
+          toast.success('Swap successful!', {
+            description: `Transaction: ${txid.slice(0, 8)}...`
+          });
+        },
+        onSwapError: ({ error }: { error: any }) => {
+          console.error('[Jupiter Terminal] Swap error:', error);
+          toast.error('Swap failed', {
+            description: error?.message || 'Please try again'
+          });
+        },
+      });
 
-    // Trigger the wallet connection with Privy wallet
-    window.Jupiter.resume();
+      jupiterInitialized.current = true;
+    } catch (error) {
+      console.error('[Jupiter Terminal] Init error:', error);
+      toast.error('Failed to open swap interface');
+    }
   };
 
   return (
@@ -78,7 +96,7 @@ export function JupiterSwapButton() {
         className="w-full"
         size="lg"
       >
-        Swap SOL → TRAPANI
+        {!scriptLoaded.current ? 'Loading...' : 'Swap SOL → TRAPANI'}
       </Button>
       <div id="integrated-terminal"></div>
     </div>
