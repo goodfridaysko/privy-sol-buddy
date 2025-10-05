@@ -19,7 +19,14 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const { signAndSendTransaction } = useSignAndSendTransaction();
   
   // Get the embedded wallet (first wallet which is the Privy embedded one)
-  const wallet = wallets[0];
+  const wallet = wallets && wallets.length > 0 ? wallets[0] : null;
+  
+  console.log('🎯 SwapInterface state:', {
+    address,
+    hasWallets: wallets && wallets.length > 0,
+    walletCount: wallets?.length,
+    hasQuote: !!quote,
+  });
 
   // Fetch quote when amount changes using Raydium API
   useEffect(() => {
@@ -60,8 +67,15 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const handleSwap = async () => {
     if (!wallet || !quote) {
       toast.error('Wallet not connected or quote not available');
+      console.error('❌ Cannot swap:', { hasWallet: !!wallet, hasQuote: !!quote });
       return;
     }
+
+    console.log('🔄 handleSwap called with:', { 
+      wallet: wallet.address,
+      quoteId: quote.id,
+      amount 
+    });
 
     setIsSwapping(true);
     toast.loading('Preparing swap...', { id: 'swap' });
