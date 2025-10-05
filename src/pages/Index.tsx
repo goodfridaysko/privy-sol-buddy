@@ -12,7 +12,7 @@ import { ActionButtons } from '@/components/wallet/ActionButtons';
 import { TokenList } from '@/components/wallet/TokenList';
 import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
-import { SwapPanel } from '@/components/SwapPanel';
+import { JupiterSwapButton } from '@/components/JupiterSwapButton';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
 import { MoonPayModal } from '@/components/MoonPayModal';
 import { Wallet, Loader2, Image, CreditCard } from 'lucide-react';
@@ -171,13 +171,8 @@ const Index = () => {
           </p>
         </div>
 
-        {/* Swap Panel - Uses Jupiter V6 with Embedded Privy Wallet */}
-        <SwapPanel
-          onSwapResult={({ signature }) => {
-            console.log('🔄 Swap completed, refreshing balance...', signature);
-            refetchBalance();
-          }}
-        />
+        {/* Jupiter Swap - Opens Jupiter Terminal widget */}
+        <JupiterSwapButton />
 
         {/* Action Buttons */}
         <ActionButtons
