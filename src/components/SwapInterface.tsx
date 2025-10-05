@@ -6,6 +6,7 @@ import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SwapInterfaceProps {
   address: string;
@@ -71,27 +72,18 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       console.log('🔄 Starting swap...', { amount, quote });
 
-      // Get swap transaction from Jupiter V6 API (works directly in browser)
-      const response = await fetch('https://quote-api.jup.ag/v6/swap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      // Get swap transaction via edge function (bypasses CORS)
+      const { data: swapData, error: swapError } = await supabase.functions.invoke('jupiter-swap', {
+        body: {
           quoteResponse: quote,
           userPublicKey: address,
-          wrapAndUnwrapSol: true,
-          dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: 'auto',
-        }),
+        },
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to get swap transaction: ${errorText}`);
-      }
+      if (swapError) throw swapError;
+      if (!swapData?.swapTransaction) throw new Error('No swap transaction returned');
 
-      const { swapTransaction } = await response.json();
+      const { swapTransaction } = swapData;
 
       // Deserialize transaction
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
