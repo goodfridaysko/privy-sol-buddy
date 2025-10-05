@@ -6,7 +6,6 @@ import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
-import { supabase } from '@/integrations/supabase/client';
 
 interface SwapInterfaceProps {
   address: string;
@@ -19,7 +18,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [quote, setQuote] = useState<any>(null);
   const { wallet } = useEmbeddedSolWallet();
 
-  // Fetch quote when amount changes
+  // Fetch quote when amount changes using Raydium API
   useEffect(() => {
     if (!amount || parseFloat(amount) <= 0) {
       setQuote(null);
@@ -31,22 +30,17 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       try {
         const lamports = Math.floor(parseFloat(amount) * 1e9);
         
-        // Use Jupiter Ultra API for quotes (works in browser)
+        // Use Raydium API for quotes (direct browser call)
         const response = await fetch(
-          `https://ultra-api.jup.ag/order?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&swapMode=ExactIn`,
-          {
-            headers: {
-              'x-client-platform': 'lovable-wallet',
-            },
-          }
+          `https://api-v3.raydium.io/compute/swap-base-in?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50&txVersion=V0`
         );
         
         if (!response.ok) {
-          throw new Error('Failed to fetch quote');
+          throw new Error('Failed to fetch quote from Raydium');
         }
         
         const data = await response.json();
-        console.log('📊 Quote received:', data);
+        console.log('📊 Raydium quote received:', data);
         setQuote(data);
       } catch (error) {
         console.error('Failed to fetch quote:', error);
@@ -70,24 +64,44 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     toast.loading('Preparing swap...', { id: 'swap' });
 
     try {
-      console.log('🔄 Starting swap...', { amount, quote });
+      console.log('🔄 Starting Raydium swap...', { amount, quote });
 
-      // Get swap transaction via edge function (bypasses CORS)
-      const { data: swapData, error: swapError } = await supabase.functions.invoke('jupiter-swap', {
-        body: {
-          quoteResponse: quote,
-          userPublicKey: address,
+      // Get priority fee
+      const priorityFeeResponse = await fetch('https://api-v3.raydium.io/main/auto-fee');
+      const priorityFeeData = await priorityFeeResponse.json();
+      const priorityFee = String(priorityFeeData.data.default.h); // high priority
+
+      console.log('💰 Priority fee:', priorityFee);
+
+      // Build swap transaction via Raydium API
+      const swapResponse = await fetch('https://api-v3.raydium.io/transaction/swap-base-in', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          computeUnitPriceMicroLamports: priorityFee,
+          swapResponse: quote,
+          txVersion: 'V0',
+          wallet: address,
+          wrapSol: true, // Input is SOL
+          unwrapSol: false, // Output is token
+        }),
       });
 
-      if (swapError) throw swapError;
-      if (!swapData?.swapTransaction) throw new Error('No swap transaction returned');
+      if (!swapResponse.ok) {
+        const errorText = await swapResponse.text();
+        throw new Error(`Failed to build swap transaction: ${errorText}`);
+      }
 
-      const { swapTransaction } = swapData;
+      const swapData = await swapResponse.json();
+      
+      if (!swapData.success || !swapData.data?.[0]?.transaction) {
+        throw new Error('Invalid swap transaction response');
+      }
 
-      // Deserialize transaction
-      const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
-      const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+      const transactionBuf = Buffer.from(swapData.data[0].transaction, 'base64');
+      const transaction = VersionedTransaction.deserialize(transactionBuf);
 
       console.log('📝 Transaction prepared, signing and sending...');
 
@@ -133,13 +147,17 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     }
   };
 
-  const outputAmount = quote 
-    ? (parseInt(quote.outAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const outputAmount = quote?.data
+    ? (parseInt(quote.data.outputAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
-  const exchangeRate = quote 
-    ? (parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const exchangeRate = quote?.data
+    ? (parseInt(quote.data.outputAmount) / parseInt(quote.data.inputAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
+
+  const priceImpact = quote?.data?.priceImpactPct
+    ? parseFloat(quote.data.priceImpactPct).toFixed(2)
+    : null;
 
   return (
     <div className="p-6 space-y-4 bg-card rounded-lg border border-border">
@@ -210,9 +228,9 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
             <p className="text-xs text-center text-muted-foreground">
               Rate: 1 SOL ≈ {exchangeRate} $TRAPANI
             </p>
-            {quote.priceImpactPct && (
+            {priceImpact && (
               <p className="text-xs text-center text-muted-foreground">
-                Price Impact: {parseFloat(quote.priceImpactPct).toFixed(2)}%
+                Price Impact: {priceImpact}%
               </p>
             )}
           </div>
