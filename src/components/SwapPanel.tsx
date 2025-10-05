@@ -55,8 +55,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       console.log('[SwapPanel] Starting PumpPortal swap...');
       toast.info('Building swap transaction...');
 
-      // Get transaction from PumpPortal
-      const tx = await buyTokenWithSOL(
+      // Get transaction bytes from PumpPortal
+      const txBytes = await buyTokenWithSOL(
         address,
         TRAPANI_MINT,
         amountSOL,
@@ -64,13 +64,13 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         PRIORITY_FEE
       );
 
-      console.log('[SwapPanel] Transaction received from PumpPortal');
+      console.log('[SwapPanel] Transaction received from PumpPortal, bytes:', txBytes.length);
       toast.info('Please approve in Privy wallet...');
 
-      // Sign and send with Privy
+      // Sign and send with Privy - pass raw transaction bytes
       const txResult = await solanaWallet.signAndSendTransaction({
         chain: 'solana:mainnet',
-        transaction: tx.serialize()
+        transaction: txBytes
       });
 
       // Extract signature - convert Uint8Array to base58 string if needed

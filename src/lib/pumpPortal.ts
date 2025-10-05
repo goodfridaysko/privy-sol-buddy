@@ -20,11 +20,11 @@ export interface PumpPortalTradeParams {
 
 /**
  * Get a swap transaction from PumpPortal API
- * Returns a VersionedTransaction ready for signing
+ * Returns serialized transaction bytes for Privy signing
  */
 export async function getPumpPortalTransaction(
   params: PumpPortalTradeParams
-): Promise<VersionedTransaction> {
+): Promise<Uint8Array> {
   console.log('[PumpPortal] Requesting transaction:', {
     action: params.action,
     mint: params.mint.slice(0, 8) + '...',
@@ -48,14 +48,14 @@ export async function getPumpPortalTransaction(
 
   // Response is serialized transaction bytes
   const data = await response.arrayBuffer();
-  const tx = VersionedTransaction.deserialize(new Uint8Array(data));
+  const txBytes = new Uint8Array(data);
   
   console.log('[PumpPortal] Transaction received:', {
-    version: tx.version,
-    signatures: tx.signatures.length,
+    size: txBytes.length,
+    bytes: txBytes
   });
 
-  return tx;
+  return txBytes;
 }
 
 /**
@@ -67,7 +67,7 @@ export async function buyTokenWithSOL(
   solAmount: number,
   slippage: number = 10,
   priorityFee: number = 0.00001
-): Promise<VersionedTransaction> {
+): Promise<Uint8Array> {
   return getPumpPortalTransaction({
     publicKey,
     action: 'buy',
@@ -89,7 +89,7 @@ export async function sellTokenForSOL(
   percentage: string = '100%',
   slippage: number = 10,
   priorityFee: number = 0.00001
-): Promise<VersionedTransaction> {
+): Promise<Uint8Array> {
   return getPumpPortalTransaction({
     publicKey,
     action: 'sell',
