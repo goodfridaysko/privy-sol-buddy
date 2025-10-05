@@ -59,7 +59,7 @@ export async function fetchJupiterQuote(
     restrictIntermediateTokens: 'true',
   });
 
-  const url = `https://lite-api.jup.ag/v6/quote?${params}`;
+  const url = `https://lite-api.jup.ag/quote?${params}`;
   console.log('[Jupiter Quote] Calling:', url);
 
   const response = await fetch(url, {
@@ -120,8 +120,7 @@ export async function buildJupiterSwap(
     }
   };
 
-  console.log('[Jupiter Swap] Calling Jupiter swap API (lite-api v6)...');
-  const response = await fetch('https://lite-api.jup.ag/v6/swap', {
+  const response = await fetch('https://lite-api.jup.ag/swap', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
