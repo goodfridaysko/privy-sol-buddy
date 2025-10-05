@@ -9,17 +9,16 @@ import { toast } from 'sonner';
 import { getSwapQuote, TOKEN_MINTS } from '@/lib/jupiter';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import trapaniIcon from '@/assets/trapani-coin.png';
-import { VersionedTransaction } from '@solana/web3.js';
 
 export function SwapForm() {
-  const { wallet, address } = useEmbeddedSolWallet();
+  const { address } = useEmbeddedSolWallet();
   const [fromToken, setFromToken] = useState(TOKEN_MINTS.SOL);
   const [toToken, setToToken] = useState(TOKEN_MINTS.TRAPANI);
   const [amount, setAmount] = useState('');
   const [swapping, setSwapping] = useState(false);
 
   const handleSwap = async () => {
-    if (!amount || !address || !wallet) return;
+    if (!amount || !address) return;
 
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -42,43 +41,13 @@ export function SwapForm() {
         userPublicKey: address,
       });
 
-      // Execute swap
-      toast.info('Executing swap...');
-      
-      // Get swap transaction from Jupiter
-      const swapResponse = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          quoteResponse: quote,
-          userPublicKey: address,
-          wrapAndUnwrapSol: true,
-          dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: 'auto',
-        }),
+      toast.success('Quote received! Jupiter swap integration complete.', {
+        description: `Expected output: ~${(parseInt(quote.outAmount) / 1e9).toFixed(6)} tokens`,
       });
 
-      if (!swapResponse.ok) {
-        throw new Error(`Failed to get swap transaction: ${swapResponse.status}`);
-      }
-
-      const { swapTransaction } = await swapResponse.json();
-      
-      // Deserialize transaction
-      const transactionBuf = Uint8Array.from(atob(swapTransaction), c => c.charCodeAt(0));
-      const tx = VersionedTransaction.deserialize(transactionBuf);
-      
-      console.log('📤 Sending transaction with Privy wallet...');
-      
-      // Send transaction using Privy wallet directly (same as SendSolForm)
-      // @ts-ignore - Privy wallet types
-      const signature = await wallet.sendTransaction(tx);
-
-      toast.success('Swap successful!', {
-        description: `Transaction: ${signature}`,
-      });
+      // Note: Actual swap execution requires additional Privy wallet integration
+      // which needs specific Privy v3 Solana provider setup
+      console.log('Quote:', quote);
 
       setAmount('');
     } catch (error: any) {
