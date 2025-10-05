@@ -62,28 +62,32 @@ export async function createTransferTransaction(
 }
 
 /**
- * Get SOL balance for an address with fallback support
+ * Get SOL balance for an address using backend proxy
+ * This avoids client-side rate limits by using our edge function
  */
 export async function getBalance(address: string): Promise<number> {
   try {
-    console.log('🔍 Fetching balance from Ankr RPC...');
-    const publicKey = new PublicKey(address);
-    const balance = await connection.getBalance(publicKey);
-    console.log('✅ Balance fetched successfully:', lamportsToSol(balance), 'SOL');
-    return lamportsToSol(balance);
-  } catch (error) {
-    console.warn('⚠️ Ankr RPC failed, trying fallback...', error);
+    console.log('🔍 Fetching balance via backend proxy...');
     
-    // Try fallback connection
-    try {
-      const publicKey = new PublicKey(address);
-      const balance = await fallbackConnection.getBalance(publicKey);
-      console.log('✅ Balance fetched from fallback:', lamportsToSol(balance), 'SOL');
-      return lamportsToSol(balance);
-    } catch (fallbackError) {
-      console.error('❌ Both RPCs failed:', fallbackError);
-      return 0;
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-sol-balance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ address }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+
+    const data = await response.json();
+    console.log('✅ Balance fetched:', data.balance, 'SOL');
+    return data.balance || 0;
+  } catch (error) {
+    console.error('❌ Failed to fetch balance:', error);
+    return 0;
   }
 }
 

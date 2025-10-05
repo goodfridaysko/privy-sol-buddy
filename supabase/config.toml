@@ -2,3 +2,6 @@ project_id = "hdbkgxksshavucusngem"
 
 [functions.sign-moonpay-url]
 verify_jwt = false
+
+[functions.get-sol-balance]
+verify_jwt = false
