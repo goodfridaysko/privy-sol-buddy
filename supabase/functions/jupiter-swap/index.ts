@@ -40,8 +40,8 @@ serve(async (req) => {
       }
     };
 
-    console.log('📤 Calling Jupiter swap API...');
-    const response = await fetch('https://quote-api.jup.ag/v6/swap', {
+    console.log('📤 Calling Jupiter swap API (lite-api)...');
+    const response = await fetch('https://lite-api.jup.ag/v6/swap', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
