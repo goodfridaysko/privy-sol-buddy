@@ -66,12 +66,10 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       console.log('🔄 Starting Raydium swap...', { amount, quote });
 
-      // Get priority fee
-      const priorityFeeResponse = await fetch('https://transaction-v1.raydium.io/main/auto-fee');
-      const priorityFeeData = await priorityFeeResponse.json();
-      const priorityFee = String(priorityFeeData.data.default.h); // high priority
+      // Use a reasonable fixed priority fee (10000 microLamports = 0.00001 SOL per compute unit)
+      const priorityFee = '10000';
 
-      console.log('💰 Priority fee:', priorityFee);
+      console.log('💰 Using priority fee:', priorityFee);
 
       // Build swap transaction via Raydium API
       const swapResponse = await fetch('https://transaction-v1.raydium.io/transaction/swap-base-in', {
