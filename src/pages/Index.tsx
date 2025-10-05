@@ -13,7 +13,7 @@ import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
 import { SwapForm } from '@/components/SwapForm';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
-import { Wallet, Loader2, Image } from 'lucide-react';
+import { Wallet, Loader2, Image, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
@@ -162,6 +162,21 @@ const Index = () => {
           userEmail={user?.email?.address}
           onLogout={logout}
         />
+
+        {/* Prominent Buy Button */}
+        <div className="px-6 py-4">
+          <Button 
+            onClick={handleFund}
+            size="lg"
+            className="w-full bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow text-lg font-semibold h-14"
+          >
+            <CreditCard className="mr-2 h-6 w-6" />
+            Buy Crypto with Card
+          </Button>
+          <p className="text-xs text-center text-muted-foreground mt-2">
+            Powered by MoonPay • Test Mode Active
+          </p>
+        </div>
 
         {/* Action Buttons */}
         <ActionButtons
