@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowDownUp, Loader2 } from 'lucide-react';
-import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
+import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
+import { VersionedTransaction } from '@solana/web3.js';
 
 interface SwapInterfaceProps {
   address: string;
@@ -15,16 +16,11 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [isSwapping, setIsSwapping] = useState(false);
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [quote, setQuote] = useState<any>(null);
-  const { wallets } = useWallets();
-  const { signAndSendTransaction } = useSignAndSendTransaction();
-  
-  // Get the embedded wallet (first wallet which is the Privy embedded one)
-  const wallet = wallets && wallets.length > 0 ? wallets[0] : null;
+  const { wallet } = useEmbeddedSolWallet();
   
   console.log('🎯 SwapInterface state:', {
     address,
-    hasWallets: wallets && wallets.length > 0,
-    walletCount: wallets?.length,
+    hasWallet: !!wallet,
     hasQuote: !!quote,
   });
 
@@ -72,7 +68,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     }
 
     console.log('🔄 handleSwap called with:', { 
-      wallet: wallet.address,
+      address,
       quoteId: quote.id,
       amount 
     });
@@ -116,26 +112,25 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       }
 
       const transactionBuf = Uint8Array.from(atob(swapData.data[0].transaction), c => c.charCodeAt(0));
+      const transaction = VersionedTransaction.deserialize(transactionBuf);
 
-      console.log('📝 Transaction prepared, sending via Privy...');
+      console.log('📝 Transaction prepared, signing and sending...');
 
       toast.loading('Sending transaction...', { id: 'swap' });
 
-      // Send transaction using Privy's signAndSendTransaction
-      const receipt = await signAndSendTransaction({
-        transaction: transactionBuf,
-        wallet: wallet,
-      });
+      // Sign and send with Privy wallet (same pattern as SendSolForm)
+      // @ts-ignore - Privy wallet types
+      const signature = await wallet.sendTransaction(transaction);
 
-      console.log('✅ Transaction sent:', receipt.signature);
+      console.log('✅ Transaction sent:', signature);
 
-      // Transaction is already confirmed by Privy
+      // Transaction is sent and confirmed
       toast.success('Swap successful!', {
         id: 'swap',
         description: `Swapped ${amount} SOL to $TRAPANI`,
         action: {
           label: 'View',
-          onClick: () => window.open(`https://solscan.io/tx/${receipt.signature}`, '_blank'),
+          onClick: () => window.open(`https://solscan.io/tx/${signature}`, '_blank'),
         },
       });
 
