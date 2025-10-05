@@ -1,5 +1,4 @@
 import { usePrivy } from '@privy-io/react-auth';
-import { useWallets } from '@privy-io/react-auth/solana';
 import { useMemo } from 'react';
 
 /**
@@ -9,21 +8,18 @@ import { useMemo } from 'react';
  * - Auto-creates on first login
  * - Encrypts keys client-side
  * - Never exposes seed phrases
- * - Supports transaction signing via sendTransaction
  * 
- * @throws Error if wallet is not provisioned (user must authenticate first)
  * @returns {object} Wallet information and ready state
  */
 export function useEmbeddedSolWallet() {
   const { ready, authenticated, user } = usePrivy();
-  const { wallets } = useWallets();
 
   const solanaWallet = useMemo(() => {
     console.log('🔍 Checking Privy user wallets:', { 
       ready,
       authenticated,
       hasUser: !!user,
-      walletsCount: wallets?.length,
+      walletsCount: user?.linkedAccounts?.length,
     });
     
     if (!ready) {
@@ -36,25 +32,37 @@ export function useEmbeddedSolWallet() {
       return null;
     }
     
-    // Find embedded Solana wallet
-    const walletClient = wallets.find((wallet: any) => (wallet as any).walletClientType === 'privy');
+    if (!user?.linkedAccounts) {
+      console.log('❌ No linked accounts found');
+      return null;
+    }
     
-    if (walletClient) {
+    // Find Solana embedded wallet in linkedAccounts
+    const walletAccount: any = user.linkedAccounts.find(
+      (account: any) => 
+        account.type === 'wallet' && 
+        account.chainType === 'solana' &&
+        account.walletClientType === 'privy'
+    );
+    
+    if (walletAccount) {
       console.log('✅ Found Solana embedded wallet:', {
-        address: walletClient.address,
-        walletClientType: (walletClient as any).walletClientType,
+        address: walletAccount.address,
+        chainType: walletAccount.chainType,
+        walletClientType: walletAccount.walletClientType,
       });
     } else {
-      console.log('❌ No Privy embedded wallet found. Available wallets:', 
-        wallets.map((w: any) => ({
-          address: w.address,
-          walletClientType: (w as any).walletClientType,
+      console.log('❌ No Solana wallet found. Available accounts:', 
+        user.linkedAccounts.map((a: any) => ({
+          type: a.type,
+          chainType: a.chainType,
+          walletClientType: a.walletClientType,
         }))
       );
     }
     
-    return walletClient || null;
-  }, [ready, authenticated, user, wallets]);
+    return walletAccount || null;
+  }, [ready, authenticated, user]);
 
   const address = solanaWallet?.address as string | undefined;
   const hasWallet = !!solanaWallet;
@@ -65,7 +73,7 @@ export function useEmbeddedSolWallet() {
   }
 
   return {
-    /** The Privy wallet object */
+    /** The Privy wallet account metadata */
     wallet: solanaWallet,
     /** The Solana wallet address (base58 string) */
     address,

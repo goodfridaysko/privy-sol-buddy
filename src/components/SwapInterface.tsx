@@ -109,7 +109,11 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       // Send transaction via Privy's signAndSendTransaction
       const receipt = await signAndSendTransaction({
         transaction: transactionBuf,
-        wallet: wallet as any,
+        wallet: {
+          address: address,
+          chainType: 'solana',
+          walletClientType: 'privy',
+        } as any,
       });
 
       const signature = receipt.signature;
