@@ -6,27 +6,66 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('🚀 Jupiter Quote function called');
+  
   if (req.method === 'OPTIONS') {
+    console.log('✅ OPTIONS request handled');
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { inputMint, outputMint, amount, slippageBps } = await req.json();
+    console.log('📥 Parsing request body...');
+    const body = await req.json();
+    const { inputMint, outputMint, amount, slippageBps } = body;
 
-    console.log('Fetching Jupiter quote:', { inputMint, outputMint, amount, slippageBps });
+    console.log('📊 Quote request:', {
+      inputMint,
+      outputMint,
+      amount,
+      slippageBps,
+      amountSOL: amount / 1e9
+    });
 
-    const response = await fetch(
-      `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps || 50}`
-    );
+    // Validate inputs
+    if (!inputMint || !outputMint || !amount) {
+      throw new Error('Missing required parameters');
+    }
+
+    if (amount < 1000000) { // Less than 0.001 SOL
+      throw new Error('Amount too small (minimum 0.001 SOL)');
+    }
+
+    const url = `https://quote-api.jup.ag/v6/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps || 50}`;
+    console.log('🔗 Calling Jupiter API:', url);
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    console.log('📡 Jupiter API response status:', response.status);
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('Jupiter API error:', error);
-      throw new Error(`Jupiter API failed: ${error}`);
+      const errorText = await response.text();
+      console.error('❌ Jupiter API error:', errorText);
+      throw new Error(`Jupiter API failed (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
-    console.log('Quote received:', data);
+    
+    // Validate response
+    if (!data || !data.inputMint || !data.outputMint) {
+      console.error('❌ Invalid Jupiter response:', data);
+      throw new Error('Invalid quote response from Jupiter');
+    }
+
+    console.log('✅ Quote received successfully:', {
+      inAmount: data.inAmount,
+      outAmount: data.outAmount,
+      priceImpact: data.priceImpactPct
+    });
 
     return new Response(
       JSON.stringify(data),
@@ -36,9 +75,14 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('💥 Function error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
     return new Response(
-      JSON.stringify({ error: String(error) }),
+      JSON.stringify({ 
+        error: errorMessage,
+        timestamp: new Date().toISOString()
+      }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
