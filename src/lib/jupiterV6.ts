@@ -59,7 +59,7 @@ export async function fetchJupiterQuote(
     restrictIntermediateTokens: 'true',
   });
 
-  const url = `https://lite-api.jup.ag/swap/v1/quote?${params}`;
+  const url = `https://lite-api.jup.ag/v6/quote?${params}`;
   console.log('[Jupiter Quote] Calling:', url);
 
   const response = await fetch(url, {
@@ -92,14 +92,14 @@ export async function fetchJupiterQuote(
 }
 
 /**
- * Build swap transaction directly from Jupiter V6 API (client-side for smooth UX)
- * Returns properly formatted transaction for Privy signing
+ * Build swap transaction from Jupiter V6 API
+ * Returns base64 serialized transaction - caller deserializes to VersionedTransaction
  */
 export async function buildJupiterSwap(
   quote: JupiterQuoteResponse,
   userPublicKey: string
-): Promise<Uint8Array> {
-  console.log('[Jupiter Swap] Building transaction directly from API:', {
+): Promise<string> {
+  console.log('[Jupiter Swap] Building transaction for:', {
     user: userPublicKey.slice(0, 8) + '...',
     inAmount: quote.inAmount,
     outAmount: quote.outAmount,
@@ -109,7 +109,7 @@ export async function buildJupiterSwap(
     quoteResponse: quote,
     userPublicKey,
     wrapAndUnwrapSol: true,
-    useSharedAccounts: true, // Auto-create ATA if needed (~0.002 SOL)
+    useSharedAccounts: true,
     dynamicComputeUnitLimit: true,
     dynamicSlippage: true,
     prioritizationFeeLamports: {
@@ -120,8 +120,8 @@ export async function buildJupiterSwap(
     }
   };
 
-  console.log('[Jupiter Swap] Calling Jupiter swap API...');
-  const response = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+  console.log('[Jupiter Swap] Calling Jupiter swap API (lite-api v6)...');
+  const response = await fetch('https://lite-api.jup.ag/v6/swap', {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',
@@ -143,19 +143,9 @@ export async function buildJupiterSwap(
     throw new Error('Invalid swap transaction response from Jupiter');
   }
 
-  console.log('[Jupiter Swap] Transaction built successfully');
-
-  // Convert base64 to Uint8Array
-  const transactionBuf = Uint8Array.from(atob(data.swapTransaction), c => c.charCodeAt(0));
+  console.log('[Jupiter Swap] Transaction built successfully (base64)');
   
-  // Deserialize and re-serialize to ensure proper format for Privy
-  try {
-    const transaction = VersionedTransaction.deserialize(transactionBuf);
-    console.log('[Jupiter Swap] Transaction deserialized successfully, re-serializing for Privy');
-    return transaction.serialize();
-  } catch (error) {
-    console.error('[Jupiter Swap] Failed to deserialize transaction:', error);
-    // If deserialization fails, return the raw buffer
-    return transactionBuf;
-  }
+  // Return base64 string - DO NOT deserialize here
+  // Caller will convert to VersionedTransaction
+  return data.swapTransaction;
 }

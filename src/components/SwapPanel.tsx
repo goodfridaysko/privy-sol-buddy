@@ -9,8 +9,7 @@ import { usePrices } from '@/hooks/usePrices';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { Connection } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { Connection, VersionedTransaction } from '@solana/web3.js';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number; outAmount: number }) => void;
@@ -121,38 +120,42 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       toast.info('Building swap transaction...');
       console.log('[SwapPanel] Building transaction for wallet:', address);
-      const transactionBuffer = await buildJupiterSwap(freshQuote, address);
+      const swapTransactionBase64 = await buildJupiterSwap(freshQuote, address);
 
-      console.log('[SwapPanel] Transaction buffer received, length:', transactionBuffer.length);
+      // Deserialize to VersionedTransaction (DO NOT mutate after this)
+      const vtx = VersionedTransaction.deserialize(Buffer.from(swapTransactionBase64, 'base64'));
+      console.log('[SwapPanel] Transaction deserialized:', {
+        version: vtx.version,
+        isVersioned: vtx instanceof VersionedTransaction,
+        signatures: vtx.signatures.length
+      });
 
       toast.info('Please approve in Privy wallet...');
-      console.log('[SwapPanel] Requesting signature from Privy...');
+      console.log('[SwapPanel] Calling signAndSendTransaction...');
       
-      // Sign with Privy - transaction already has valid blockhash from Jupiter
-      const signResult = await solanaWallet.signTransaction({
-        transaction: transactionBuffer,
+      // Privy signAndSendTransaction expects chain ID and serialized transaction
+      const txResult = await solanaWallet.signAndSendTransaction({
+        chain: 'solana:mainnet',
+        transaction: vtx.serialize()
       });
       
-      console.log('[SwapPanel] Transaction signed, sending to network...');
-      
-      // Send the signed transaction
-      const signature = await connection.sendRawTransaction(signResult.signedTransaction, {
-        skipPreflight: false,
-        maxRetries: 3,
-      });
-      
+      // Extract signature - Privy returns { signature: Uint8Array }
+      const signatureBytes = txResult.signature;
+      const signature = typeof signatureBytes === 'string' 
+        ? signatureBytes 
+        : Buffer.from(signatureBytes).toString('base64');
       console.log('[SwapPanel] Transaction sent:', signature);
       toast.info('Confirming transaction...');
       
-      // Wait for confirmation with generous timeout
-      const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+      // Wait for confirmation
+      await connection.confirmTransaction(signature, 'confirmed');
       
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction confirmed:', signature);
       
       if (onSwapResult) {
         onSwapResult({
-          signature: signature,
+          signature,
           inAmount: parseInt(freshQuote.inAmount) / 1e9,
           outAmount: parseInt(freshQuote.outAmount),
         });
