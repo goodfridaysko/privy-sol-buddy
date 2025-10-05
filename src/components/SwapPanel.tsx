@@ -9,7 +9,7 @@ import { usePrices } from '@/hooks/usePrices';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { Connection, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 interface SwapPanelProps {
@@ -125,32 +125,12 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       console.log('[SwapPanel] Transaction buffer received, length:', transactionBuffer.length);
 
-      // Deserialize to verify and get proper format
-      const transaction = VersionedTransaction.deserialize(transactionBuffer);
-      console.log('[SwapPanel] Transaction deserialized successfully');
-
-      // Get fresh blockhash
-      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
-      
-      // Create new transaction message with fresh blockhash
-      const newMessage = TransactionMessage.decompile(transaction.message, {
-        addressLookupTableAccounts: [],
-      });
-      
-      // Compile with fresh blockhash
-      newMessage.recentBlockhash = blockhash;
-      const compiledMessage = newMessage.compileToV0Message([]);
-      
-      // Create new transaction with fresh blockhash
-      const freshTransaction = new VersionedTransaction(compiledMessage);
-      console.log('[SwapPanel] Transaction updated with fresh blockhash');
-
       toast.info('Please approve in Privy wallet...');
       console.log('[SwapPanel] Requesting signature from Privy...');
       
-      // Sign with Privy
+      // Sign with Privy - transaction already has valid blockhash from Jupiter
       const signResult = await solanaWallet.signTransaction({
-        transaction: freshTransaction.serialize(),
+        transaction: transactionBuffer,
       });
       
       console.log('[SwapPanel] Transaction signed, sending to network...');
@@ -164,12 +144,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       console.log('[SwapPanel] Transaction sent:', signature);
       toast.info('Confirming transaction...');
       
-      // Wait for confirmation
-      await connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      }, 'confirmed');
+      // Wait for confirmation with generous timeout
+      const confirmation = await connection.confirmTransaction(signature, 'confirmed');
       
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction confirmed:', signature);
