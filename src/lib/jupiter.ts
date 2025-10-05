@@ -88,8 +88,8 @@ export async function executeSwap(
   const { swapTransaction } = await swapResponse.json();
   console.log('✅ Swap transaction received');
 
-  // Deserialize transaction
-  const transactionBuf = Buffer.from(swapTransaction, 'base64');
+  // Deserialize transaction - use browser-compatible base64 decoding
+  const transactionBuf = Uint8Array.from(atob(swapTransaction), c => c.charCodeAt(0));
   const transaction = VersionedTransaction.deserialize(transactionBuf);
 
   // Sign with Privy wallet
