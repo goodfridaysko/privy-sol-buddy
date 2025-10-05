@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { TRAPANI_MINT } from '@/config/swap';
 
 interface PriceData {
   sol: number;
@@ -18,19 +20,14 @@ export function usePrices() {
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        // Fetch SOL price from CoinGecko (free, no API key needed)
-        const solResponse = await fetch(
-          'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd'
-        );
-        const solData = await solResponse.json();
-        const solPrice = solData?.solana?.usd || 0;
+        const { data, error } = await supabase.functions.invoke('get-token-prices', {
+          body: { tokenMints: [TRAPANI_MINT] }
+        });
 
-        // Fetch TRAPANI price from Jupiter Price API v2
-        const trapaniResponse = await fetch(
-          `https://api.jup.ag/price/v2?ids=Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump`
-        );
-        const trapaniData = await trapaniResponse.json();
-        const trapaniPrice = trapaniData?.data?.['Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump']?.price || 0;
+        if (error) throw error;
+
+        const solPrice = data?.prices?.['So11111111111111111111111111111111111111112'] || 0;
+        const trapaniPrice = data?.prices?.[TRAPANI_MINT] || 0;
 
         setPrices({
           sol: solPrice,

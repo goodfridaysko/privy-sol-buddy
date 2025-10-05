@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { VersionedTransaction } from '@solana/web3.js';
 import { usePrices } from '@/hooks/usePrices';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SwapInterfaceProps {
   address: string;
@@ -25,7 +26,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   // Get the embedded wallet (first wallet is the Privy embedded wallet)
   const wallet = wallets?.[0];
 
-  // Fetch quote from Jupiter
+  // Fetch quote from Jupiter via edge function
   const fetchQuote = useCallback(async () => {
     if (!amount || parseFloat(amount) <= 0) {
       setQuote(null);
@@ -36,15 +37,17 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       const lamports = Math.floor(parseFloat(amount) * 1e9);
       
-      const response = await fetch(
-        `https://quote-api.jup.ag/v6/quote?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50`
-      );
+      const { data, error } = await supabase.functions.invoke('jupiter-quote', {
+        body: {
+          inputMint: SOL_MINT,
+          outputMint: TRAPANI_MINT,
+          amount: lamports,
+          slippageBps: 50
+        }
+      });
+
+      if (error) throw error;
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch quote');
-      }
-      
-      const data = await response.json();
       console.log('📊 Jupiter quote:', data);
       setQuote(data);
       setQuoteTimestamp(Date.now());
@@ -95,29 +98,17 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       console.log('🔄 Building swap transaction with Jupiter...');
       
-      // Get swap transaction from Jupiter
-      const swapResponse = await fetch('https://quote-api.jup.ag/v6/swap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Get swap transaction from Jupiter via edge function
+      const { data, error } = await supabase.functions.invoke('jupiter-swap', {
+        body: {
           quoteResponse: quote,
-          userPublicKey: address,
-          wrapAndUnwrapSol: true,
-          dynamicComputeUnitLimit: true,
-          priorityLevelWithMaxLamports: {
-            maxLamports: 10000000,
-            priorityLevel: "high"
-          }
-        }),
+          userPublicKey: address
+        }
       });
 
-      if (!swapResponse.ok) {
-        const errorText = await swapResponse.text();
-        console.error('Jupiter swap error:', errorText);
-        throw new Error('Failed to build swap transaction');
-      }
+      if (error) throw error;
 
-      const { swapTransaction } = await swapResponse.json();
+      const { swapTransaction } = data;
       
       if (!swapTransaction) {
         throw new Error('No transaction returned from Jupiter');
