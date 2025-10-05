@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowDownUp, Loader2 } from 'lucide-react';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
+import { useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
-import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction } from '@solana/web3.js';
 
 interface SwapInterfaceProps {
   address: string;
@@ -17,6 +18,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [quote, setQuote] = useState<any>(null);
   const { wallet } = useEmbeddedSolWallet();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
 
   // Fetch quote when amount changes using Raydium API
   useEffect(() => {
@@ -99,29 +101,21 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       }
 
       const transactionBuf = Uint8Array.from(atob(swapData.data[0].transaction), c => c.charCodeAt(0));
-      const transaction = VersionedTransaction.deserialize(transactionBuf);
 
-      console.log('📝 Transaction prepared, signing and sending...');
-
-      // Create connection
-      const connection = new Connection('https://api.mainnet-beta.solana.com');
+      console.log('📝 Transaction prepared, signing and sending via Privy...');
 
       toast.loading('Sending transaction...', { id: 'swap' });
 
-      // Send transaction via Privy wallet
-      const signature = await wallet.sendTransaction(transaction, connection);
+      // Send transaction via Privy's signAndSendTransaction
+      const receipt = await signAndSendTransaction({
+        transaction: transactionBuf,
+        wallet: wallet as any,
+      });
 
+      const signature = receipt.signature;
       console.log('✅ Transaction sent:', signature);
 
-      // Wait for confirmation
-      toast.loading('Confirming transaction...', { id: 'swap' });
-
-      const confirmation = await connection.confirmTransaction(signature, 'confirmed');
-
-      if (confirmation.value.err) {
-        throw new Error('Transaction failed');
-      }
-
+      // Transaction is already confirmed by Privy
       toast.success('Swap successful!', {
         id: 'swap',
         description: `Swapped ${amount} SOL to $TRAPANI`,
