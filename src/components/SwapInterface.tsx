@@ -98,7 +98,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         throw new Error('Invalid swap transaction response');
       }
 
-      const transactionBuf = Buffer.from(swapData.data[0].transaction, 'base64');
+      const transactionBuf = Uint8Array.from(atob(swapData.data[0].transaction), c => c.charCodeAt(0));
       const transaction = VersionedTransaction.deserialize(transactionBuf);
 
       console.log('📝 Transaction prepared, signing and sending...');
