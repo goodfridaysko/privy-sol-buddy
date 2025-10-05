@@ -6,6 +6,7 @@ import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { VersionedTransaction } from '@solana/web3.js';
+import { sendWithEmbeddedWallet } from '@/lib/solana';
 
 interface SwapInterfaceProps {
   address: string;
@@ -118,9 +119,8 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
 
       toast.loading('Sending transaction...', { id: 'swap' });
 
-      // Sign and send with Privy wallet (same pattern as SendSolForm)
-      // @ts-ignore - Privy wallet types
-      const signature = await wallet.sendTransaction(transaction);
+      // Sign and send with Privy wallet using the utility function
+      const signature = await sendWithEmbeddedWallet(wallet, transaction);
 
       console.log('✅ Transaction sent:', signature);
 
