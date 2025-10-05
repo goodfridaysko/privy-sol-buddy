@@ -7,10 +7,11 @@ import {
   clusterApiUrl,
 } from '@solana/web3.js';
 
-// Solana connection - using mainnet-beta by default
-// Can switch to 'devnet' or 'testnet' for testing
+// Solana connection - using reliable public RPC endpoint
+// Using Helius public endpoint which has better rate limits than Solana's default
+const RPC_ENDPOINT = 'https://mainnet.helius-rpc.com/?api-key=public';
 export const CLUSTER = 'mainnet-beta';
-export const connection = new Connection(clusterApiUrl(CLUSTER), 'confirmed');
+export const connection = new Connection(RPC_ENDPOINT, 'confirmed');
 
 /**
  * Convert SOL to lamports (1 SOL = 1,000,000,000 lamports)
