@@ -1,8 +1,9 @@
 import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { connection } from './solana';
 
-// Jupiter API endpoint
-const JUPITER_API = 'https://quote-api.jup.ag/v6';
+// Jupiter API endpoint (v1 is the stable version)
+const JUPITER_QUOTE_API = 'https://api.jup.ag/swap/v1/quote';
+const JUPITER_SWAP_API = 'https://api.jup.ag/swap/v1/swap';
 
 interface SwapParams {
   inputMint: string; // Token mint address (SOL: So11111111111111111111111111111111111111112)
@@ -30,18 +31,24 @@ interface QuoteResponse {
 export async function getSwapQuote(params: SwapParams): Promise<QuoteResponse> {
   const { inputMint, outputMint, amount, slippageBps } = params;
 
-  const url = new URL(`${JUPITER_API}/quote`);
+  const url = new URL(JUPITER_QUOTE_API);
   url.searchParams.append('inputMint', inputMint);
   url.searchParams.append('outputMint', outputMint);
   url.searchParams.append('amount', amount.toString());
   url.searchParams.append('slippageBps', slippageBps.toString());
 
+  console.log('🔍 Fetching Jupiter quote:', url.toString());
+  
   const response = await fetch(url.toString());
   if (!response.ok) {
-    throw new Error('Failed to fetch swap quote');
+    const errorText = await response.text();
+    console.error('❌ Jupiter quote error:', response.status, errorText);
+    throw new Error(`Failed to fetch swap quote: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('✅ Jupiter quote received:', data);
+  return data;
 }
 
 /**
@@ -56,7 +63,9 @@ export async function executeSwap(
   signTransaction: (tx: VersionedTransaction) => Promise<VersionedTransaction>
 ): Promise<string> {
   // Get swap transaction from Jupiter
-  const swapResponse = await fetch(`${JUPITER_API}/swap`, {
+  console.log('🔄 Requesting swap transaction from Jupiter...');
+  
+  const swapResponse = await fetch(JUPITER_SWAP_API, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -71,10 +80,13 @@ export async function executeSwap(
   });
 
   if (!swapResponse.ok) {
-    throw new Error('Failed to get swap transaction');
+    const errorText = await swapResponse.text();
+    console.error('❌ Jupiter swap error:', swapResponse.status, errorText);
+    throw new Error(`Failed to get swap transaction: ${swapResponse.status}`);
   }
 
   const { swapTransaction } = await swapResponse.json();
+  console.log('✅ Swap transaction received');
 
   // Deserialize transaction
   const transactionBuf = Buffer.from(swapTransaction, 'base64');
