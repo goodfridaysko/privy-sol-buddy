@@ -46,6 +46,12 @@ export function PrivyClient({ children }: PrivyClientProps) {
           accentColor: '#9333ea',
           logo: undefined,
         },
+        fundingMethodConfig: {
+          moonpay: {
+            useSandbox: true, // Enable MoonPay test mode
+            paymentMethod: 'credit_debit_card',
+          },
+        },
       }}
     >
       {children}

@@ -49,8 +49,13 @@ const Index = () => {
   const handleFund = async () => {
     if (!address) return;
     try {
+      console.log('💳 Opening MoonPay for wallet:', address);
       await fundWallet(address);
+      toast.success('MoonPay opened', {
+        description: 'Test mode enabled - use test cards'
+      });
     } catch (error) {
+      console.error('Fund error:', error);
       toast.error('Failed to open funding flow');
     }
   };
