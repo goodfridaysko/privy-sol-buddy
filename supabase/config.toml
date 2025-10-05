@@ -1,1 +1,4 @@
 project_id = "hdbkgxksshavucusngem"
+
+[functions.sign-moonpay-url]
+verify_jwt = false
