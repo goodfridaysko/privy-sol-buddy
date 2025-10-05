@@ -11,11 +11,11 @@ export function useEmbeddedSolWallet() {
   const { wallets } = useWallets();
 
   const solanaWallet = useMemo(() => {
-    // Find the Solana embedded wallet
+    // Find the Solana embedded wallet - Privy wallets use 'solana:...' format
     return wallets.find(
       (wallet) => 
         wallet.walletClientType === 'privy' && 
-        wallet.address?.startsWith('So') // Solana addresses start with 'So' or other chars
+        (wallet.chainId?.startsWith('solana') || wallet.address?.length === 44)
     );
   }, [wallets]);
 
