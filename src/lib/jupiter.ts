@@ -1,8 +1,7 @@
 import { JUPITER_API_URL } from '@/config/swap';
 
-// Use edge function proxy to avoid CORS issues
-const USE_PROXY = true;
-const PROXY_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+// Jupiter API supports CORS for browser requests
+const USE_PROXY = false;
 
 export interface QuoteParams {
   inputMint: string;
@@ -63,36 +62,23 @@ export async function getQuote(params: QuoteParams): Promise<QuoteResponse> {
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      let response: Response;
+      // Direct API call - Jupiter supports CORS
+      const url = new URL(`${JUPITER_API_URL}/quote`);
+      url.searchParams.append('inputMint', inputMint);
+      url.searchParams.append('outputMint', outputMint);
+      url.searchParams.append('amount', amount.toString());
+      url.searchParams.append('slippageBps', slippageBps.toString());
+      url.searchParams.append('onlyDirectRoutes', 'false');
+      url.searchParams.append('asLegacyTransaction', 'false');
 
-      if (USE_PROXY) {
-        // Use edge function proxy to avoid CORS
-        console.log('🔍 Fetching quote via edge function proxy...');
-        response = await fetch(`${PROXY_BASE_URL}/jupiter-quote`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({ inputMint, outputMint, amount, slippageBps }),
-        });
-      } else {
-        // Direct API call
-        const url = new URL(`${JUPITER_API_URL}/quote`);
-        url.searchParams.append('inputMint', inputMint);
-        url.searchParams.append('outputMint', outputMint);
-        url.searchParams.append('amount', amount.toString());
-        url.searchParams.append('slippageBps', slippageBps.toString());
-        url.searchParams.append('onlyDirectRoutes', 'false');
-        url.searchParams.append('asLegacyTransaction', 'false');
+      console.log('🔍 Fetching Jupiter quote:', url.toString());
 
-        response = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          },
-        });
-      }
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -139,42 +125,22 @@ export async function buildSwapTransaction(params: SwapParams): Promise<SwapResp
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      let response: Response;
-
-      if (USE_PROXY) {
-        // Use edge function proxy to avoid CORS
-        console.log('🔄 Building swap transaction via edge function proxy...');
-        response = await fetch(`${PROXY_BASE_URL}/jupiter-swap`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-          },
-          body: JSON.stringify({
-            quoteResponse,
-            userPublicKey,
-            wrapAndUnwrapSol,
-            dynamicComputeUnitLimit,
-            prioritizationFeeLamports,
-          }),
-        });
-      } else {
-        // Direct API call
-        response = await fetch(`${JUPITER_API_URL}/swap`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify({
-            quoteResponse,
-            userPublicKey,
-            wrapAndUnwrapSol,
-            dynamicComputeUnitLimit,
-            prioritizationFeeLamports,
-          }),
-        });
-      }
+      // Direct API call - Jupiter supports CORS
+      console.log('🔄 Building swap transaction...');
+      const response = await fetch(`${JUPITER_API_URL}/swap`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          quoteResponse,
+          userPublicKey,
+          wrapAndUnwrapSol,
+          dynamicComputeUnitLimit,
+          prioritizationFeeLamports,
+        }),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
