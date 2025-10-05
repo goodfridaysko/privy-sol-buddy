@@ -93,7 +93,7 @@ export async function fetchJupiterQuote(
 
 /**
  * Build swap transaction directly from Jupiter V6 API (client-side for smooth UX)
- * Returns base64 encoded transaction ready for signing with Privy
+ * Returns properly formatted transaction for Privy signing
  */
 export async function buildJupiterSwap(
   quote: JupiterQuoteResponse,
@@ -145,8 +145,17 @@ export async function buildJupiterSwap(
 
   console.log('[Jupiter Swap] Transaction built successfully');
 
-  // Convert base64 to Uint8Array for Privy
+  // Convert base64 to Uint8Array
   const transactionBuf = Uint8Array.from(atob(data.swapTransaction), c => c.charCodeAt(0));
-
-  return transactionBuf;
+  
+  // Deserialize and re-serialize to ensure proper format for Privy
+  try {
+    const transaction = VersionedTransaction.deserialize(transactionBuf);
+    console.log('[Jupiter Swap] Transaction deserialized successfully, re-serializing for Privy');
+    return transaction.serialize();
+  } catch (error) {
+    console.error('[Jupiter Swap] Failed to deserialize transaction:', error);
+    // If deserialization fails, return the raw buffer
+    return transactionBuf;
+  }
 }

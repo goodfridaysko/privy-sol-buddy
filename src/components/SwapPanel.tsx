@@ -111,6 +111,11 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       toast.info('Building swap transaction...');
       const transactionBuffer = await buildJupiterSwap(freshQuote, address);
 
+      console.log('[Swap] Transaction buffer received:', {
+        length: transactionBuffer.length,
+        type: transactionBuffer.constructor.name,
+      });
+
       toast.info('Please sign the transaction...');
       
       const receipt = await signAndSendTransaction({
@@ -118,6 +123,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         wallet: solanaWallet,
       });
 
+      console.log('[Swap] Receipt received:', receipt);
       toast.success('Swap successful!');
       
       // Convert Uint8Array signature to base58 string
