@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { useFund } from '@/hooks/useFund';
@@ -33,6 +33,18 @@ const Index = () => {
   const [sendOpen, setSendOpen] = useState(false);
   const [swapOpen, setSwapOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [walletCreated, setWalletCreated] = useState(false);
+
+  // Detect when wallet is first created and show success message
+  useEffect(() => {
+    if (hasWallet && address && !walletCreated) {
+      console.log('🎉 Wallet created successfully!');
+      setWalletCreated(true);
+      toast.success('Wallet created successfully!', {
+        description: `Address: ${address.slice(0, 4)}...${address.slice(-4)}`
+      });
+    }
+  }, [hasWallet, address, walletCreated]);
 
   const handleFund = async () => {
     if (!address) return;
@@ -111,11 +123,22 @@ const Index = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">
+          <div className="flex justify-center">
+            <div className="rounded-full bg-gradient-primary p-4 shadow-glow">
+              <Loader2 className="h-8 w-8 animate-spin text-primary-foreground" />
+            </div>
+          </div>
+          <h2 className="text-xl font-semibold">
             {isLoading ? 'Loading wallet...' : 'Creating your wallet...'}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Your Solana wallet is being set up securely
           </p>
-          <p className="text-xs text-muted-foreground">This may take a few moments</p>
+          <div className="pt-4 space-y-2 text-xs text-muted-foreground">
+            <p>✓ Encrypted on your device</p>
+            <p>✓ No seed phrases needed</p>
+            <p>✓ Ready in seconds</p>
+          </div>
         </div>
       </div>
     );
