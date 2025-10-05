@@ -1,22 +1,22 @@
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { useMemo } from 'react';
 
 /**
  * useEmbeddedSolWallet: Returns the Privy-managed embedded Solana wallet
  * - Auto-created on first login
  * - Non-custodial, encrypted client-side
- * - Returns wallet address, signing capabilities
+ * - Returns wallet with sendTransaction capability
  */
 export function useEmbeddedSolWallet() {
   const { ready, authenticated, user } = usePrivy();
+  const wallets = useWallets();
 
   const solanaWallet = useMemo(() => {
-    console.log('🔍 Checking Privy user wallets:', { 
+    console.log('🔍 Checking Privy wallets:', { 
       ready,
       authenticated,
       hasUser: !!user,
-      walletsCount: user?.linkedAccounts?.length,
-      wallets: user?.linkedAccounts?.filter((account: any) => account.type === 'wallet')
+      walletsCount: wallets.wallets?.length,
     });
     
     if (!ready || !authenticated) {
@@ -24,34 +24,37 @@ export function useEmbeddedSolWallet() {
       return null;
     }
     
-    if (!user?.linkedAccounts) {
-      console.log('❌ No linked accounts found');
+    if (!wallets.wallets || wallets.wallets.length === 0) {
+      console.log('❌ No wallets found');
       return null;
     }
     
-    // Find Solana wallet using chainType
-    const walletAccount: any = user.linkedAccounts.find(
-      (account: any) => account.type === 'wallet' && account.chainType === 'solana'
+    // Find Solana wallet from Privy wallets
+    // Solana wallets have chainType 'solana:...' prefix
+    const solWallet = wallets.wallets.find(
+      (w: any) => {
+        const chainType = (w as any).chainType || '';
+        return w.walletClientType === 'privy' && chainType.startsWith('solana');
+      }
     );
     
-    if (walletAccount) {
-      console.log('✅ Found Solana wallet:', {
-        address: walletAccount.address,
-        chainType: walletAccount.chainType,
-        walletClientType: walletAccount.walletClientType
+    if (solWallet) {
+      console.log('✅ Found Solana embedded wallet:', {
+        address: solWallet.address,
+        walletClientType: solWallet.walletClientType
       });
     } else {
-      console.log('❌ No Solana wallet found. Available accounts:', 
-        user.linkedAccounts.map((a: any) => ({
-          type: a.type,
-          chainType: a.chainType,
-          address: a.address
+      console.log('❌ No Solana wallet found. Available wallets:', 
+        wallets.wallets.map((w: any) => ({
+          walletClientType: w.walletClientType,
+          address: w.address,
+          chainType: (w as any).chainType
         }))
       );
     }
     
-    return walletAccount || null;
-  }, [ready, authenticated, user]);
+    return solWallet || null;
+  }, [ready, authenticated, user, wallets.wallets]);
 
   const address = solanaWallet?.address as string | undefined;
 
