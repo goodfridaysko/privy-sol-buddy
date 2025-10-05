@@ -1,4 +1,4 @@
-import { useWallets } from '@privy-io/react-auth';
+import { usePrivy } from '@privy-io/react-auth';
 import { useMemo } from 'react';
 
 /**
@@ -8,53 +8,52 @@ import { useMemo } from 'react';
  * - Returns wallet address, signing capabilities
  */
 export function useEmbeddedSolWallet() {
-  const { wallets, ready } = useWallets();
+  const { ready, authenticated, user } = usePrivy();
 
   const solanaWallet = useMemo(() => {
-    console.log('🔍 Checking wallets:', { 
-      count: wallets?.length, 
+    console.log('🔍 Checking Privy user wallets:', { 
       ready,
-      wallets: wallets?.map(w => ({
-        type: w.walletClientType,
-        address: w.address,
-        addressLength: w.address?.length
-      }))
+      authenticated,
+      hasUser: !!user,
+      walletsCount: user?.linkedAccounts?.length,
+      wallets: user?.linkedAccounts?.filter((account: any) => account.type === 'wallet')
     });
     
-    if (!ready) {
-      console.log('⏳ Wallets not ready yet');
+    if (!ready || !authenticated) {
+      console.log('⏳ Privy not ready or not authenticated');
       return null;
     }
     
-    if (!wallets || wallets.length === 0) {
-      console.log('❌ No wallets found');
+    if (!user?.linkedAccounts) {
+      console.log('❌ No linked accounts found');
       return null;
     }
     
-    // Find Solana embedded wallet by Privy client type and Solana address format (32-44 chars base58)
-    const wallet = wallets.find(
-      (w) => w.walletClientType === 'privy' && 
-             w.address && 
-             w.address.length >= 32 && 
-             w.address.length <= 44
+    // Find Solana wallet using chainType
+    const walletAccount: any = user.linkedAccounts.find(
+      (account: any) => account.type === 'wallet' && account.chainType === 'solana'
     );
     
-    if (wallet) {
+    if (walletAccount) {
       console.log('✅ Found Solana wallet:', {
-        address: wallet.address,
-        clientType: wallet.walletClientType
+        address: walletAccount.address,
+        chainType: walletAccount.chainType,
+        walletClientType: walletAccount.walletClientType
       });
     } else {
-      console.log('❌ No Solana wallet found in:', wallets.map(w => ({
-        type: w.walletClientType,
-        addr: w.address
-      })));
+      console.log('❌ No Solana wallet found. Available accounts:', 
+        user.linkedAccounts.map((a: any) => ({
+          type: a.type,
+          chainType: a.chainType,
+          address: a.address
+        }))
+      );
     }
     
-    return wallet || null;
-  }, [wallets, ready]);
+    return walletAccount || null;
+  }, [ready, authenticated, user]);
 
-  const address = solanaWallet?.address;
+  const address = solanaWallet?.address as string | undefined;
 
   return {
     wallet: solanaWallet,
