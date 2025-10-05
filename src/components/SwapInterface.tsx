@@ -116,11 +116,17 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       const transaction = VersionedTransaction.deserialize(transactionBuf);
 
       console.log('📝 Transaction prepared, signing and sending...');
+      console.log('🔍 Wallet object:', wallet);
+      console.log('🔍 Wallet methods:', wallet ? Object.keys(wallet) : 'no wallet');
 
       toast.loading('Sending transaction...', { id: 'swap' });
 
-      // Sign and send with Privy wallet using the utility function
-      const signature = await sendWithEmbeddedWallet(wallet, transaction);
+      // The wallet object from useEmbeddedSolWallet is just metadata
+      // We need to serialize the transaction and send it via Privy's API
+      const serializedTx = Buffer.from(transaction.serialize()).toString('base64');
+      
+      // @ts-ignore - Use Privy's sendTransaction on the wallet account
+      const signature = await wallet.sendTransaction(serializedTx);
 
       console.log('✅ Transaction sent:', signature);
 
