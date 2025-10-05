@@ -32,7 +32,9 @@ export async function getJupiterQuote(
   slippageBps: number = 50
 ): Promise<JupiterQuote> {
   try {
-    console.log('📊 Fetching Jupiter quote via edge function:', {
+    const url = `${JUPITER_QUOTE_API}/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps}`;
+    
+    console.log('📊 Fetching Jupiter quote:', {
       inputMint,
       outputMint,
       amount,
@@ -40,25 +42,17 @@ export async function getJupiterQuote(
       slippageBps
     });
 
-    // Use edge function to avoid CORS issues
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jupiter-quote`, {
-      method: 'POST',
+    const response = await fetch(url, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        inputMint,
-        outputMint,
-        amount,
-        slippageBps,
-      }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Jupiter quote error:', errorText);
-      throw new Error(`Failed to get quote: ${errorText}`);
+      throw new Error(`Jupiter API error (${response.status}): ${errorText}`);
     }
 
     const quote = await response.json();
@@ -85,27 +79,32 @@ export async function getJupiterSwapTransaction(
   userPublicKey: string
 ): Promise<VersionedTransaction> {
   try {
-    console.log('🔧 Building swap transaction via edge function for:', userPublicKey);
+    console.log('🔧 Building swap transaction for:', userPublicKey);
 
-    // Use edge function to avoid CORS issues
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/jupiter-swap`, {
+    const swapRequest: SwapRequest = {
+      quoteResponse: quote,
+      userPublicKey,
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      priorityLevelWithMaxLamports: {
+        maxLamports: 10000000,
+        priorityLevel: 'high'
+      }
+    };
+
+    const response = await fetch(`${JUPITER_QUOTE_API}/swap`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({
-        quoteResponse: quote,
-        userPublicKey,
-        wrapAndUnwrapSol: true,
-        dynamicComputeUnitLimit: true,
-      }),
+      body: JSON.stringify(swapRequest),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Jupiter swap error:', errorText);
-      throw new Error(`Failed to build swap transaction: ${errorText}`);
+      throw new Error(`Jupiter swap failed (${response.status}): ${errorText}`);
     }
 
     const { swapTransaction } = await response.json();
