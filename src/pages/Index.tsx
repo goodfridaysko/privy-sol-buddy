@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 
 const Index = () => {
   const { login, logout, ready, authenticated, user } = useAuth();
-  const { address, hasWallet } = useEmbeddedSolWallet();
+  const { address, hasWallet, isLoading } = useEmbeddedSolWallet();
   const { fundWallet } = useFund();
   
   const [sendOpen, setSendOpen] = useState(false);
@@ -97,13 +97,16 @@ const Index = () => {
     );
   }
 
-  // Authenticated but no wallet yet
-  if (!hasWallet || !address) {
+  // Authenticated but wallet still loading or not created
+  if (authenticated && (isLoading || !hasWallet || !address)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="text-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">Creating your wallet...</p>
+          <p className="text-muted-foreground">
+            {isLoading ? 'Loading wallet...' : 'Creating your wallet...'}
+          </p>
+          <p className="text-xs text-muted-foreground">This may take a few moments</p>
         </div>
       </div>
     );

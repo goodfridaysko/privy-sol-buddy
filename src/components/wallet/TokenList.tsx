@@ -1,12 +1,12 @@
 import { useBalance } from '@/hooks/useBalance';
-import { Coins } from 'lucide-react';
+import { Coins, Loader2 } from 'lucide-react';
 
 interface TokenListProps {
   address: string;
 }
 
 export function TokenList({ address }: TokenListProps) {
-  const { data: balance = 0 } = useBalance(address);
+  const { data: balance = 0, isLoading, error } = useBalance(address);
 
   // In a real app, you'd fetch all tokens from the wallet
   const tokens = [
@@ -19,6 +19,23 @@ export function TokenList({ address }: TokenListProps) {
       change24h: 5.2,
     },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="px-6 pb-6 text-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+        <p className="text-sm text-muted-foreground mt-2">Loading balance...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-6 pb-6 text-center py-8">
+        <p className="text-sm text-destructive">Failed to load balance</p>
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 pb-6">

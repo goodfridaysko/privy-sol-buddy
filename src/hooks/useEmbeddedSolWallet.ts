@@ -11,12 +11,16 @@ export function useEmbeddedSolWallet() {
   const { wallets } = useWallets();
 
   const solanaWallet = useMemo(() => {
-    // Find the Solana embedded wallet - Privy wallets use 'solana:...' format
-    return wallets.find(
-      (wallet) => 
-        wallet.walletClientType === 'privy' && 
-        (wallet.chainId?.startsWith('solana') || wallet.address?.length === 44)
+    if (!wallets || wallets.length === 0) return null;
+    
+    // Find the Solana embedded wallet
+    const wallet = wallets.find(
+      (w) => 
+        w.walletClientType === 'privy' && 
+        (w.address?.length === 44 || w.address?.length === 43 || w.address?.length === 32)
     );
+    
+    return wallet || null;
   }, [wallets]);
 
   const address = solanaWallet?.address;
@@ -24,7 +28,7 @@ export function useEmbeddedSolWallet() {
   return {
     wallet: solanaWallet,
     address,
-    // Check if wallet exists
     hasWallet: !!solanaWallet,
+    isLoading: !wallets,
   };
 }

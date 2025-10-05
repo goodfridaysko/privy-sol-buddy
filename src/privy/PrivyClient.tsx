@@ -25,13 +25,11 @@ export function PrivyClient({ children }: PrivyClientProps) {
     <PrivyProvider
       appId={appId}
       config={{
-        // Enable embedded wallet for Solana
         embeddedWallets: {
           solana: {
-            createOnLogin: 'users-without-wallets', // Auto-create wallet for new users
+            createOnLogin: 'users-without-wallets',
           },
         },
-        // Login methods - email, SMS, passkey (no seed phrase recovery)
         loginMethods: ['email', 'sms', 'wallet'],
         appearance: {
           theme: 'dark',
