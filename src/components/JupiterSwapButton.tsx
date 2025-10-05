@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowDownUp } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { JupiterSwapForm } from './JupiterSwapForm';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { JupiterTerminal } from './JupiterTerminal';
 
 interface JupiterSwapButtonProps {
   address: string;
@@ -23,11 +23,8 @@ export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md bg-gradient-card border-border">
-          <DialogHeader>
-            <DialogTitle>Swap Tokens</DialogTitle>
-          </DialogHeader>
-          <JupiterSwapForm address={address} onSuccess={() => setOpen(false)} />
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] bg-background border-border p-0 overflow-hidden">
+          <JupiterTerminal onClose={() => setOpen(false)} />
         </DialogContent>
       </Dialog>
     </>
