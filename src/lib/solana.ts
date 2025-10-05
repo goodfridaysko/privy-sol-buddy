@@ -1,17 +1,16 @@
-import {
-  Connection,
-  PublicKey,
+import { 
+  Connection, 
+  PublicKey, 
+  LAMPORTS_PER_SOL, 
+  VersionedTransaction,
   SystemProgram,
-  Transaction,
-  LAMPORTS_PER_SOL,
-  clusterApiUrl,
+  Transaction
 } from '@solana/web3.js';
+import { RPC_URL } from '@/config/swap';
 
-// Solana connection - using Ankr's free public RPC endpoint
-// Ankr provides reliable free access with better rate limits than Solana's default
-// Fallback to official Solana RPC if Ankr fails
-const PRIMARY_RPC = 'https://rpc.ankr.com/solana';
-const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
+// Primary and fallback RPC endpoints
+const PRIMARY_RPC = RPC_URL;
+const FALLBACK_RPC = 'https://rpc.ankr.com/solana';
 
 export const CLUSTER = 'mainnet-beta';
 export const connection = new Connection(PRIMARY_RPC, 'confirmed');
@@ -32,10 +31,27 @@ export function lamportsToSol(lamports: number): number {
 }
 
 /**
+ * Format SOL amount for display
+ */
+export function formatSol(lamports: number, decimals: number = 4): string {
+  const sol = lamportsToSol(lamports);
+  return sol.toFixed(decimals);
+}
+
+/**
+ * Validate Solana address
+ */
+export function isValidSolanaAddress(address: string): boolean {
+  try {
+    new PublicKey(address);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Create a SOL transfer transaction
- * @param from - Sender's public key
- * @param to - Recipient's public key (base58 string)
- * @param amountSol - Amount in SOL to send
  */
 export async function createTransferTransaction(
   from: PublicKey,
@@ -44,7 +60,6 @@ export async function createTransferTransaction(
 ): Promise<Transaction> {
   const transaction = new Transaction();
 
-  // Add transfer instruction
   transaction.add(
     SystemProgram.transfer({
       fromPubkey: from,
@@ -53,7 +68,6 @@ export async function createTransferTransaction(
     })
   );
 
-  // Get recent blockhash
   const { blockhash } = await connection.getLatestBlockhash();
   transaction.recentBlockhash = blockhash;
   transaction.feePayer = from;
@@ -92,13 +106,81 @@ export async function getBalance(address: string): Promise<number> {
 }
 
 /**
- * Validate Solana address
+ * Deserialize a base64 encoded transaction into a VersionedTransaction
  */
-export function isValidSolanaAddress(address: string): boolean {
+export function deserializeTransaction(base64Transaction: string): VersionedTransaction {
   try {
-    new PublicKey(address);
-    return true;
-  } catch {
+    const transactionBuffer = Buffer.from(base64Transaction, 'base64');
+    return VersionedTransaction.deserialize(transactionBuffer);
+  } catch (error) {
+    console.error('Failed to deserialize transaction:', error);
+    throw new Error('Invalid transaction format');
+  }
+}
+
+/**
+ * Send a transaction using the embedded wallet
+ * This is a wrapper that handles the wallet's sendTransaction method
+ */
+export async function sendWithEmbeddedWallet(
+  wallet: any,
+  transaction: VersionedTransaction
+): Promise<string> {
+  if (!wallet || !wallet.sendTransaction) {
+    throw new Error('Wallet not available or does not support sendTransaction');
+  }
+
+  try {
+    console.log('📝 Signing and sending transaction with embedded wallet...');
+    const signature = await wallet.sendTransaction(transaction);
+    console.log('✅ Transaction sent:', signature);
+    return signature;
+  } catch (error: any) {
+    console.error('❌ Transaction failed:', error);
+    
+    // Parse common errors
+    if (error.message?.includes('User rejected')) {
+      throw new Error('Transaction was rejected by user');
+    } else if (error.message?.includes('insufficient')) {
+      throw new Error('Insufficient SOL balance for transaction');
+    } else if (error.message?.includes('blockhash')) {
+      throw new Error('Transaction expired, please try again');
+    }
+    
+    throw new Error(error.message || 'Transaction failed');
+  }
+}
+
+/**
+ * Get transaction explorer URL
+ */
+export function getExplorerUrl(signature: string, cluster: string = CLUSTER): string {
+  const baseUrl = 'https://solscan.io';
+  return `${baseUrl}/tx/${signature}${cluster !== 'mainnet-beta' ? `?cluster=${cluster}` : ''}`;
+}
+
+/**
+ * Format address for display (shortened)
+ */
+export function shortenAddress(address: string, chars: number = 4): string {
+  if (!address || address.length < chars * 2) return address;
+  return `${address.slice(0, chars)}...${address.slice(-chars)}`;
+}
+
+/**
+ * Wait for transaction confirmation
+ */
+export async function confirmTransaction(signature: string): Promise<boolean> {
+  try {
+    const latestBlockhash = await connection.getLatestBlockhash();
+    const confirmation = await connection.confirmTransaction({
+      signature,
+      ...latestBlockhash,
+    });
+    
+    return !confirmation.value.err;
+  } catch (error) {
+    console.error('Failed to confirm transaction:', error);
     return false;
   }
 }

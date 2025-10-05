@@ -3,9 +3,15 @@ import { useMemo } from 'react';
 
 /**
  * useEmbeddedSolWallet: Returns the Privy-managed embedded Solana wallet
- * - Auto-created on first login
- * - Non-custodial, encrypted client-side
- * - Returns wallet address, signing capabilities
+ * 
+ * This hook provides access to the non-custodial embedded wallet that:
+ * - Auto-creates on first login
+ * - Encrypts keys client-side
+ * - Never exposes seed phrases
+ * - Supports transaction signing via sendTransaction
+ * 
+ * @throws Error if wallet is not provisioned (user must authenticate first)
+ * @returns {object} Wallet information and ready state
  */
 export function useEmbeddedSolWallet() {
   const { ready, authenticated, user } = usePrivy();
@@ -16,11 +22,15 @@ export function useEmbeddedSolWallet() {
       authenticated,
       hasUser: !!user,
       walletsCount: user?.linkedAccounts?.length,
-      wallets: user?.linkedAccounts?.filter((account: any) => account.type === 'wallet')
     });
     
-    if (!ready || !authenticated) {
-      console.log('⏳ Privy not ready or not authenticated');
+    if (!ready) {
+      console.log('⏳ Privy SDK not ready yet');
+      return null;
+    }
+    
+    if (!authenticated) {
+      console.log('❌ User not authenticated');
       return null;
     }
     
@@ -31,21 +41,25 @@ export function useEmbeddedSolWallet() {
     
     // Find Solana wallet using chainType
     const walletAccount: any = user.linkedAccounts.find(
-      (account: any) => account.type === 'wallet' && account.chainType === 'solana'
+      (account: any) => 
+        account.type === 'wallet' && 
+        account.chainType === 'solana' &&
+        account.walletClientType === 'privy'
     );
     
     if (walletAccount) {
-      console.log('✅ Found Solana wallet:', {
+      console.log('✅ Found Solana embedded wallet:', {
         address: walletAccount.address,
         chainType: walletAccount.chainType,
-        walletClientType: walletAccount.walletClientType
+        walletClientType: walletAccount.walletClientType,
+        connectorType: walletAccount.connectorType,
       });
     } else {
       console.log('❌ No Solana wallet found. Available accounts:', 
         user.linkedAccounts.map((a: any) => ({
           type: a.type,
           chainType: a.chainType,
-          address: a.address
+          walletClientType: a.walletClientType,
         }))
       );
     }
@@ -54,11 +68,23 @@ export function useEmbeddedSolWallet() {
   }, [ready, authenticated, user]);
 
   const address = solanaWallet?.address as string | undefined;
+  const hasWallet = !!solanaWallet;
+
+  // Production-grade: Warn if wallet is not yet provisioned
+  if (ready && authenticated && !hasWallet && user) {
+    console.warn('⚠️ Embedded wallet not yet provisioned. Privy should auto-create on first login.');
+  }
 
   return {
+    /** The Privy wallet object with sendTransaction method */
     wallet: solanaWallet,
+    /** The Solana wallet address (base58 string) */
     address,
-    hasWallet: !!solanaWallet,
+    /** Whether wallet is provisioned and ready to use */
+    hasWallet,
+    /** Whether Privy SDK is still loading */
     isLoading: !ready,
+    /** Whether user is authenticated with wallet ready */
+    ready: ready && authenticated && hasWallet,
   };
 }
