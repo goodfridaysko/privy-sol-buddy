@@ -7,11 +7,15 @@ import {
   clusterApiUrl,
 } from '@solana/web3.js';
 
-// Solana connection - using reliable public RPC endpoint
-// Using Helius public endpoint which has better rate limits than Solana's default
-const RPC_ENDPOINT = 'https://mainnet.helius-rpc.com/?api-key=public';
+// Solana connection - using Ankr's free public RPC endpoint
+// Ankr provides reliable free access with better rate limits than Solana's default
+// Fallback to official Solana RPC if Ankr fails
+const PRIMARY_RPC = 'https://rpc.ankr.com/solana';
+const FALLBACK_RPC = 'https://api.mainnet-beta.solana.com';
+
 export const CLUSTER = 'mainnet-beta';
-export const connection = new Connection(RPC_ENDPOINT, 'confirmed');
+export const connection = new Connection(PRIMARY_RPC, 'confirmed');
+export const fallbackConnection = new Connection(FALLBACK_RPC, 'confirmed');
 
 /**
  * Convert SOL to lamports (1 SOL = 1,000,000,000 lamports)
@@ -58,16 +62,28 @@ export async function createTransferTransaction(
 }
 
 /**
- * Get SOL balance for an address
+ * Get SOL balance for an address with fallback support
  */
 export async function getBalance(address: string): Promise<number> {
   try {
+    console.log('🔍 Fetching balance from Ankr RPC...');
     const publicKey = new PublicKey(address);
     const balance = await connection.getBalance(publicKey);
+    console.log('✅ Balance fetched successfully:', lamportsToSol(balance), 'SOL');
     return lamportsToSol(balance);
   } catch (error) {
-    console.error('Error fetching balance:', error);
-    return 0;
+    console.warn('⚠️ Ankr RPC failed, trying fallback...', error);
+    
+    // Try fallback connection
+    try {
+      const publicKey = new PublicKey(address);
+      const balance = await fallbackConnection.getBalance(publicKey);
+      console.log('✅ Balance fetched from fallback:', lamportsToSol(balance), 'SOL');
+      return lamportsToSol(balance);
+    } catch (fallbackError) {
+      console.error('❌ Both RPCs failed:', fallbackError);
+      return 0;
+    }
   }
 }
 
