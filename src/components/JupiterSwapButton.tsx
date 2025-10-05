@@ -4,7 +4,7 @@ import { ArrowDownUp } from 'lucide-react';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
-import { PublicKey } from '@solana/web3.js';
+import { createJupiterWalletAdapter } from '@/lib/jupiterWalletAdapter';
 import '@/types/jupiter-plugin.d';
 
 interface JupiterSwapButtonProps {
@@ -43,11 +43,16 @@ export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
     console.log('🚀 Opening Jupiter Plugin with address:', address);
 
     try {
-      // Let Jupiter Plugin use its own built-in wallet connection
-      // This will show wallet selection UI (Phantom, Solflare, etc.)
+      // Create wallet adapter that bridges Privy wallet with Jupiter
+      const walletAdapter = createJupiterWalletAdapter(wallet, address);
+      
+      console.log('🔗 Using Privy embedded wallet with Jupiter Plugin');
+      
       window.Jupiter.init({
         displayMode: 'modal',
         endpoint: 'https://api.mainnet-beta.solana.com',
+        enableWalletPassthrough: true,
+        passthroughWalletContextState: walletAdapter,
         formProps: {
           initialInputMint: SOL_MINT,
           initialOutputMint: TRAPANI_MINT,
