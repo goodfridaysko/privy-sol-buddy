@@ -43,65 +43,55 @@ export function JupiterSwapButton({ address }: JupiterSwapButtonProps) {
     console.log('🚀 Initializing Jupiter Plugin with wallet:', address);
 
     try {
-      // Create PublicKey object for Solana Wallet Adapter compatibility
+      // Create PublicKey with proper Wallet Adapter interface
       const publicKey = new PublicKey(address);
       
-      // Initialize Jupiter Plugin with Privy wallet passthrough
-      // This creates a Solana Wallet Adapter-compatible interface
+      // Create Solana Wallet Adapter compatible wallet object
+      const walletAdapter = {
+        publicKey,
+        signTransaction: async (transaction: any) => {
+          console.log('🖊️ Jupiter requesting transaction signature');
+          try {
+            const serialized = transaction.serialize({ requireAllSignatures: false });
+            console.log('📝 Signing with Privy wallet:', wallet);
+            await wallet.sendTransaction(serialized);
+            return transaction;
+          } catch (error) {
+            console.error('❌ Sign error:', error);
+            throw error;
+          }
+        },
+        signAllTransactions: async (transactions: any[]) => {
+          console.log('🖊️ Signing multiple transactions');
+          return Promise.all(transactions.map(tx => walletAdapter.signTransaction(tx)));
+        },
+      };
+      
+      // Initialize Jupiter Plugin with proper wallet context
       window.Jupiter.init({
         displayMode: 'modal',
         endpoint: 'https://api.mainnet-beta.solana.com',
         formProps: {
           initialInputMint: SOL_MINT,
           initialOutputMint: TRAPANI_MINT,
-          fixedInputMint: false, // Allow user to change input token if needed
-          fixedOutputMint: false, // Allow user to change output token if needed
+          fixedInputMint: false,
+          fixedOutputMint: false,
         },
         enableWalletPassthrough: true,
         passthroughWalletContextState: {
           wallet: {
-            adapter: {
-              publicKey,
-              // Privy's sendTransaction handles both signing and broadcasting
-              // Jupiter Plugin will use this for transaction execution
-              signTransaction: async (transaction: any) => {
-                console.log('🖊️ Signing transaction via Privy embedded wallet');
-                try {
-                  // Privy's sendTransaction expects a serialized transaction
-                  const serializedTx = transaction.serialize();
-                  const signature = await wallet.sendTransaction(serializedTx);
-                  console.log('✅ Transaction signed and sent:', signature);
-                  // Return the signed transaction (Jupiter handles the rest)
-                  return transaction;
-                } catch (error) {
-                  console.error('❌ Transaction signing failed:', error);
-                  throw error;
-                }
-              },
-              signAllTransactions: async (transactions: any[]) => {
-                console.log('🖊️ Signing multiple transactions via Privy embedded wallet');
-                const signedTransactions = [];
-                for (const transaction of transactions) {
-                  try {
-                    const serializedTx = transaction.serialize();
-                    await wallet.sendTransaction(serializedTx);
-                    signedTransactions.push(transaction);
-                  } catch (error) {
-                    console.error('❌ Failed to sign transaction:', error);
-                    throw error;
-                  }
-                }
-                return signedTransactions;
-              },
-            },
-            publicKey,
+            adapter: walletAdapter,
+            publicKey: publicKey,
           },
+          publicKey: publicKey,
           connected: true,
           connecting: false,
           disconnecting: false,
           select: () => {},
           connect: async () => {},
           disconnect: async () => {},
+          signTransaction: walletAdapter.signTransaction,
+          signAllTransactions: walletAdapter.signAllTransactions,
         },
         onSuccess: ({ txid, swapResult }) => {
           console.log('✅ Swap successful:', txid);
