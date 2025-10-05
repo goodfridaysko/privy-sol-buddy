@@ -8,7 +8,7 @@ export const TRAPANI_MINT = 'Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump';
 
 export const SOL_MINT = 'So11111111111111111111111111111111111111112';
 
-export const SLIPPAGE_BPS = 50; // 0.5%
+export const SLIPPAGE_BPS = 150; // 1.5% - Higher tolerance for volatile tokens
 
 export const RPC_URL = 'https://api.mainnet-beta.solana.com';
 
