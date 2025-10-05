@@ -12,6 +12,7 @@ import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
 import { SwapForm } from '@/components/SwapForm';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
+import { WalletProvisionDebug } from '@/components/WalletProvisionDebug';
 import { Wallet, Loader2, Image } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -93,76 +94,79 @@ const Index = () => {
 
   // Authenticated with wallet - Phantom-like UI
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg">
-        {/* Wallet Header */}
-        <WalletHeader 
-          address={address} 
-          userEmail={user?.email?.address}
-          onLogout={logout}
-        />
+    <>
+      <WalletProvisionDebug />
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto max-w-lg">
+          {/* Wallet Header */}
+          <WalletHeader 
+            address={address} 
+            userEmail={user?.email?.address}
+            onLogout={logout}
+          />
 
-        {/* Action Buttons */}
-        <ActionButtons
-          onBuy={handleFund}
-          onSend={() => setSendOpen(true)}
-          onReceive={() => setReceiveOpen(true)}
-          onSwap={() => setSwapOpen(true)}
-        />
+          {/* Action Buttons */}
+          <ActionButtons
+            onBuy={handleFund}
+            onSend={() => setSendOpen(true)}
+            onReceive={() => setReceiveOpen(true)}
+            onSwap={() => setSwapOpen(true)}
+          />
 
-        {/* Tabs */}
-        <Tabs defaultValue="tokens" className="mt-4">
-          <TabsList className="w-full grid grid-cols-3 mx-6" style={{ width: 'calc(100% - 3rem)' }}>
-            <TabsTrigger value="tokens">Tokens</TabsTrigger>
-            <TabsTrigger value="nfts">NFTs</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="tokens" className="mt-4">
-            <TokenList address={address} />
-          </TabsContent>
-          
-          <TabsContent value="nfts" className="mt-4">
-            <div className="px-6 py-12 text-center">
-              <Image className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-muted-foreground mb-1">No NFTs yet</p>
-              <p className="text-sm text-muted-foreground">
-                Your collectibles will appear here
-              </p>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="activity" className="mt-4">
-            <ActivityTab />
-          </TabsContent>
-        </Tabs>
+          {/* Tabs */}
+          <Tabs defaultValue="tokens" className="mt-4">
+            <TabsList className="w-full grid grid-cols-3 mx-6" style={{ width: 'calc(100% - 3rem)' }}>
+              <TabsTrigger value="tokens">Tokens</TabsTrigger>
+              <TabsTrigger value="nfts">NFTs</TabsTrigger>
+              <TabsTrigger value="activity">Activity</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="tokens" className="mt-4">
+              <TokenList address={address} />
+            </TabsContent>
+            
+            <TabsContent value="nfts" className="mt-4">
+              <div className="px-6 py-12 text-center">
+                <Image className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                <p className="text-muted-foreground mb-1">No NFTs yet</p>
+                <p className="text-sm text-muted-foreground">
+                  Your collectibles will appear here
+                </p>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="activity" className="mt-4">
+              <ActivityTab />
+            </TabsContent>
+          </Tabs>
 
-        {/* Modals */}
-        <Dialog open={sendOpen} onOpenChange={setSendOpen}>
-          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
-            <DialogHeader>
-              <DialogTitle>Send SOL</DialogTitle>
-            </DialogHeader>
-            <SendSolForm onSuccess={() => setSendOpen(false)} />
-          </DialogContent>
-        </Dialog>
+          {/* Modals */}
+          <Dialog open={sendOpen} onOpenChange={setSendOpen}>
+            <DialogContent className="sm:max-w-md bg-gradient-card border-border">
+              <DialogHeader>
+                <DialogTitle>Send SOL</DialogTitle>
+              </DialogHeader>
+              <SendSolForm onSuccess={() => setSendOpen(false)} />
+            </DialogContent>
+          </Dialog>
 
-        <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
-          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
-            <DialogHeader>
-              <DialogTitle>Swap Tokens</DialogTitle>
-            </DialogHeader>
-            <SwapForm />
-          </DialogContent>
-        </Dialog>
+          <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
+            <DialogContent className="sm:max-w-md bg-gradient-card border-border">
+              <DialogHeader>
+                <DialogTitle>Swap Tokens</DialogTitle>
+              </DialogHeader>
+              <SwapForm />
+            </DialogContent>
+          </Dialog>
 
-        <ReceiveModal 
-          open={receiveOpen} 
-          onOpenChange={setReceiveOpen}
-          address={address}
-        />
+          <ReceiveModal 
+            open={receiveOpen} 
+            onOpenChange={setReceiveOpen}
+            address={address}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
