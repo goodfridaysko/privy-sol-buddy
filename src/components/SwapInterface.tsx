@@ -6,7 +6,6 @@ import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
-import { supabase } from '@/integrations/supabase/client';
 
 interface SwapInterfaceProps {
   address: string;
@@ -31,17 +30,21 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       try {
         const lamports = Math.floor(parseFloat(amount) * 1e9);
         
-        const { data, error } = await supabase.functions.invoke('jupiter-quote', {
-          body: {
-            inputMint: SOL_MINT,
-            outputMint: TRAPANI_MINT,
-            amount: lamports,
-            slippageBps: 50,
-          },
-        });
-
-        if (error) throw error;
+        // Use Jupiter Ultra API for quotes (works in browser)
+        const response = await fetch(
+          `https://ultra-api.jup.ag/order?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&swapMode=ExactIn`,
+          {
+            headers: {
+              'x-client-platform': 'lovable-wallet',
+            },
+          }
+        );
         
+        if (!response.ok) {
+          throw new Error('Failed to fetch quote');
+        }
+        
+        const data = await response.json();
         console.log('📊 Quote received:', data);
         setQuote(data);
       } catch (error) {
@@ -63,21 +66,32 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     }
 
     setIsSwapping(true);
+    toast.loading('Preparing swap...', { id: 'swap' });
 
     try {
       console.log('🔄 Starting swap...', { amount, quote });
 
-      // Get swap transaction from Jupiter via edge function
-      const { data: swapData, error: swapError } = await supabase.functions.invoke('jupiter-swap', {
-        body: {
+      // Get swap transaction from Jupiter V6 API (works directly in browser)
+      const response = await fetch('https://quote-api.jup.ag/v6/swap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           quoteResponse: quote,
           userPublicKey: address,
-        },
+          wrapAndUnwrapSol: true,
+          dynamicComputeUnitLimit: true,
+          prioritizationFeeLamports: 'auto',
+        }),
       });
 
-      if (swapError) throw swapError;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get swap transaction: ${errorText}`);
+      }
 
-      const { swapTransaction } = swapData;
+      const { swapTransaction } = await response.json();
 
       // Deserialize transaction
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
@@ -87,6 +101,8 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
 
       // Create connection
       const connection = new Connection('https://api.mainnet-beta.solana.com');
+
+      toast.loading('Sending transaction...', { id: 'swap' });
 
       // Send transaction via Privy wallet
       const signature = await wallet.sendTransaction(transaction, connection);
@@ -127,6 +143,10 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
 
   const outputAmount = quote 
     ? (parseInt(quote.outAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : '0';
+
+  const exchangeRate = quote 
+    ? (parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
   return (
@@ -194,9 +214,16 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         </Button>
 
         {quote && (
-          <p className="text-xs text-center text-muted-foreground">
-            Rate: 1 SOL ≈ {(parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })} $TRAPANI
-          </p>
+          <div className="space-y-1">
+            <p className="text-xs text-center text-muted-foreground">
+              Rate: 1 SOL ≈ {exchangeRate} $TRAPANI
+            </p>
+            {quote.priceImpactPct && (
+              <p className="text-xs text-center text-muted-foreground">
+                Price Impact: {parseFloat(quote.priceImpactPct).toFixed(2)}%
+              </p>
+            )}
+          </div>
         )}
       </div>
     </div>
