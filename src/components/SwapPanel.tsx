@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { ArrowDown, Loader2 } from 'lucide-react';
+import { ArrowDown, Loader2, RefreshCw } from 'lucide-react';
 import { TRAPANI_MINT, SOL_MINT, SLIPPAGE_BPS } from '@/config/swap';
 import { useBalance } from '@/hooks/useBalance';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
@@ -28,21 +28,23 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [quote, setQuote] = useState<JupiterQuoteResponse | null>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [countdown, setCountdown] = useState(15);
 
-  const handleGetQuote = async () => {
+  const AUTO_REFRESH_INTERVAL = 15000; // 15 seconds
+
+  const handleGetQuote = async (isAutoRefresh = false) => {
     if (!inputAmount || parseFloat(inputAmount) <= 0) {
-      toast.error('Enter a valid amount');
+      if (!isAutoRefresh) toast.error('Enter a valid amount');
       return;
     }
 
     const amountSOL = parseFloat(inputAmount);
     if (amountSOL > balance) {
-      toast.error('Insufficient SOL balance');
+      if (!isAutoRefresh) toast.error('Insufficient SOL balance');
       return;
     }
 
     setIsLoadingQuote(true);
-    setQuote(null);
 
     try {
       const amountLamports = Math.floor(amountSOL * 1e9);
@@ -53,14 +55,37 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         SLIPPAGE_BPS
       );
       setQuote(quoteData);
-      toast.success('Quote fetched successfully');
+      setCountdown(15); // Reset countdown
+      if (!isAutoRefresh) toast.success('Quote updated');
     } catch (error) {
       console.error('Quote error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to fetch quote');
+      if (!isAutoRefresh) toast.error(error instanceof Error ? error.message : 'Failed to fetch quote');
     } finally {
       setIsLoadingQuote(false);
     }
   };
+
+  // Auto-refresh quote every 15 seconds
+  useEffect(() => {
+    if (!quote) return;
+
+    const interval = setInterval(() => {
+      handleGetQuote(true);
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [quote, inputAmount]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!quote) return;
+
+    const interval = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 15));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [quote]);
 
   const handleSwap = async () => {
     if (!address || !solanaWallet || !inputAmount) {
@@ -177,6 +202,21 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Quote details */}
       {quote && (
         <div className="p-3 rounded-lg bg-muted/20 space-y-1 text-xs">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <RefreshCw className={`h-3 w-3 ${isLoadingQuote ? 'animate-spin' : ''}`} />
+              Auto-refresh in {countdown}s
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleGetQuote(false)}
+              disabled={isLoadingQuote}
+              className="h-6 px-2"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+          </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Price Impact</span>
             <span className={priceImpact > 1 ? 'text-destructive' : ''}>
@@ -194,7 +234,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       <div className="space-y-2">
         {!quote ? (
           <Button
-            onClick={handleGetQuote}
+            onClick={() => handleGetQuote(false)}
             disabled={isLoadingQuote || !address}
             className="w-full"
           >
