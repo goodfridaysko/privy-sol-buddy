@@ -8,7 +8,8 @@ import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
-import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
+import { useWallets } from '@privy-io/react-auth/solana';
+import { Connection, VersionedTransaction } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 interface SwapPanelProps {
@@ -16,12 +17,14 @@ interface SwapPanelProps {
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { signAndSendTransaction } = useSignAndSendTransaction();
   const { wallets } = useWallets();
   
   // Get first Solana wallet
   const solanaWallet = wallets[0];
   const address = solanaWallet?.address;
+  
+  // Create Solana connection
+  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice, loading: pricesLoading } = usePrices();
@@ -126,19 +129,33 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         first10Bytes: Array.from(transactionBuffer.slice(0, 10)),
       });
 
-      toast.info('Please approve the transaction in the Privy modal...');
-      console.log('[SwapPanel] Calling Privy signAndSendTransaction...');
+      // Deserialize the transaction
+      const transaction = VersionedTransaction.deserialize(transactionBuffer);
+      console.log('[SwapPanel] Transaction deserialized');
+
+      toast.info('Please approve in Privy...');
+      console.log('[SwapPanel] Signing with Privy wallet...');
       
-      // Use Privy's signAndSendTransaction with transaction and wallet
-      const txResult = await signAndSendTransaction({
+      // Sign the transaction with Privy's wallet
+      const signedResult = await solanaWallet.signTransaction({
         transaction: transactionBuffer,
-        wallet: solanaWallet,
       });
       
-      console.log('[SwapPanel] Transaction result:', txResult);
-      toast.success('Swap successful!');
+      console.log('[SwapPanel] Transaction signed, sending to network...');
       
-      const signature = bs58.encode(txResult.signature);
+      // Send the signed transaction
+      const signature = await connection.sendRawTransaction(signedResult.signedTransaction, {
+        skipPreflight: false,
+        maxRetries: 3,
+      });
+      
+      console.log('[SwapPanel] Transaction sent:', signature);
+      toast.info('Confirming transaction...');
+      
+      // Wait for confirmation
+      await connection.confirmTransaction(signature, 'confirmed');
+      
+      toast.success('Swap successful!');
       console.log('[SwapPanel] Signature:', signature);
       
       if (onSwapResult) {
