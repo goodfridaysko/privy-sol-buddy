@@ -4,16 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ArrowDownUp, Loader2, RefreshCw, AlertTriangle, ExternalLink, TrendingDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { TRAPANI_MINT, SLIPPAGE_BPS, MIN_SOL_AMOUNT, SOL_MINT } from '@/config/swap';
+import { TRAPANI_MINT, SLIPPAGE_BPS, MIN_SOL_AMOUNT, MIN_SOL_RESERVE, SOL_MINT } from '@/config/swap';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { useBalance } from '@/hooks/useBalance';
-import { getJupiterQuote, getJupiterSwapTransaction, type JupiterQuote } from '@/lib/jupiter';
+import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toSOL, toLamports, shortenAddress, getExplorerUrl } from '@/lib/solana';
 import { useFund } from '@/hooks/useFund';
 
 type SwapState = 'idle' | 'quoting' | 'readyToSwap' | 'swapping' | 'success' | 'error';
-
-const MIN_SOL_RESERVE = 0.005; // Keep for rent
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number; outAmount: number; routeInfo?: any }) => void;
@@ -25,7 +23,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { fundWallet } = useFund();
   
   const [inputAmount, setInputAmount] = useState('');
-  const [quote, setQuote] = useState<JupiterQuote | null>(null);
+  const [quote, setQuote] = useState<JupiterQuoteResponse | null>(null);
   const [quoteTimestamp, setQuoteTimestamp] = useState(0);
   const [state, setState] = useState<SwapState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +73,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     try {
       const amountLamports = Number(toLamports(amount));
       
-      const quoteResponse = await getJupiterQuote(
+      const quoteResponse = await fetchJupiterQuote(
         SOL_MINT,
         TRAPANI_MINT,
         amountLamports,
@@ -86,7 +84,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       setQuoteTimestamp(Date.now());
       setState('readyToSwap');
       
-      // Calculate price impact
+      // Check price impact
       const priceImpact = quoteResponse.priceImpactPct || 0;
       if (priceImpact > 5) {
         toast.warning(`High price impact: ${priceImpact.toFixed(2)}%`, {
@@ -94,9 +92,17 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         });
       }
     } catch (err: any) {
-      console.error('Quote error:', err);
-      setError(err.message || 'Failed to get quote');
+      console.error('[Swap] Quote error:', err);
+      const errorMsg = err.message || 'Failed to get quote';
+      setError(errorMsg);
       setState('error');
+      
+      // Show user-friendly error
+      toast.error('Quote failed', {
+        description: errorMsg.includes('fetch') 
+          ? 'Network error. Please check your connection and try again.'
+          : errorMsg,
+      });
     }
   };
 
@@ -118,14 +124,17 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
     try {
       // Build the swap transaction
-      const tx = await getJupiterSwapTransaction(quote, address);
+      console.log('[Swap] Building transaction...');
+      const tx = await buildJupiterSwap(quote, address);
 
       toast.loading('Sign the transaction in your wallet...', { id: toastId });
 
       // Sign and send with embedded wallet
+      console.log('[Swap] Signing with embedded wallet...');
       // @ts-ignore - Privy wallet types
       const sig = await wallet.sendTransaction(tx);
       
+      console.log('[Swap] Transaction sent:', sig);
       setSignature(sig);
       setState('success');
 
@@ -136,9 +145,10 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         id: toastId,
         description: `Swapped ${inAmount} SOL for ${outAmount.toFixed(4)} TRAPANI`,
         action: {
-          label: 'View',
+          label: 'View on Solscan',
           onClick: () => window.open(getExplorerUrl(sig), '_blank'),
         },
+        duration: 10000,
       });
 
       // Callback with results
@@ -152,20 +162,29 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       }
 
       // Refetch balance
-      setTimeout(() => refetchBalance(), 2000);
+      setTimeout(() => refetchBalance(), 3000);
 
-      // Reset form
-      setInputAmount('');
-      setQuote(null);
+      // Reset form after delay
+      setTimeout(() => {
+        setInputAmount('');
+        setQuote(null);
+        setState('idle');
+      }, 5000);
 
     } catch (err: any) {
-      console.error('Swap error:', err);
-      const errorMsg = err.message || 'Swap failed';
+      console.error('[Swap] Transaction error:', err);
+      const errorMsg = err.message || 'Transaction failed';
       setError(errorMsg);
       setState('error');
+      
       toast.error('Swap failed', {
         id: toastId,
-        description: errorMsg,
+        description: errorMsg.includes('User rejected') 
+          ? 'Transaction was rejected'
+          : errorMsg.includes('insufficient') 
+          ? 'Insufficient SOL balance'
+          : errorMsg,
+        duration: 8000,
       });
     }
   };
