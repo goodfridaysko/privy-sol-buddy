@@ -9,7 +9,7 @@ import { usePrices } from '@/hooks/usePrices';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { Connection, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 interface SwapPanelProps {
@@ -123,28 +123,40 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       console.log('[SwapPanel] Building transaction for wallet:', address);
       const transactionBuffer = await buildJupiterSwap(freshQuote, address);
 
-      console.log('[SwapPanel] Transaction buffer received:', {
-        length: transactionBuffer.length,
-        type: transactionBuffer.constructor.name,
-        first10Bytes: Array.from(transactionBuffer.slice(0, 10)),
-      });
+      console.log('[SwapPanel] Transaction buffer received, length:', transactionBuffer.length);
 
-      // Deserialize the transaction
+      // Deserialize to verify and get proper format
       const transaction = VersionedTransaction.deserialize(transactionBuffer);
-      console.log('[SwapPanel] Transaction deserialized');
+      console.log('[SwapPanel] Transaction deserialized successfully');
 
-      toast.info('Please approve in Privy...');
-      console.log('[SwapPanel] Signing with Privy wallet...');
+      // Get fresh blockhash
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
       
-      // Sign the transaction with Privy's wallet
-      const signedResult = await solanaWallet.signTransaction({
-        transaction: transactionBuffer,
+      // Create new transaction message with fresh blockhash
+      const newMessage = TransactionMessage.decompile(transaction.message, {
+        addressLookupTableAccounts: [],
+      });
+      
+      // Compile with fresh blockhash
+      newMessage.recentBlockhash = blockhash;
+      const compiledMessage = newMessage.compileToV0Message([]);
+      
+      // Create new transaction with fresh blockhash
+      const freshTransaction = new VersionedTransaction(compiledMessage);
+      console.log('[SwapPanel] Transaction updated with fresh blockhash');
+
+      toast.info('Please approve in Privy wallet...');
+      console.log('[SwapPanel] Requesting signature from Privy...');
+      
+      // Sign with Privy
+      const signResult = await solanaWallet.signTransaction({
+        transaction: freshTransaction.serialize(),
       });
       
       console.log('[SwapPanel] Transaction signed, sending to network...');
       
       // Send the signed transaction
-      const signature = await connection.sendRawTransaction(signedResult.signedTransaction, {
+      const signature = await connection.sendRawTransaction(signResult.signedTransaction, {
         skipPreflight: false,
         maxRetries: 3,
       });
@@ -153,10 +165,14 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       toast.info('Confirming transaction...');
       
       // Wait for confirmation
-      await connection.confirmTransaction(signature, 'confirmed');
+      await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      }, 'confirmed');
       
       toast.success('Swap successful!');
-      console.log('[SwapPanel] Signature:', signature);
+      console.log('[SwapPanel] Transaction confirmed:', signature);
       
       if (onSwapResult) {
         onSwapResult({
