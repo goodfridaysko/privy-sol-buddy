@@ -129,15 +129,18 @@ const Index = () => {
             </div>
           </div>
           <h2 className="text-xl font-semibold">
-            {isLoading ? 'Loading wallet...' : 'Creating your wallet...'}
+            {isLoading ? 'Loading wallet...' : 'Setting up your wallet...'}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Your Solana wallet is being set up securely
+            Your Solana wallet is being created securely
+          </p>
+          <p className="text-xs text-muted-foreground mt-2">
+            This may take a few moments...
           </p>
           <div className="pt-4 space-y-2 text-xs text-muted-foreground">
             <p>✓ Encrypted on your device</p>
             <p>✓ No seed phrases needed</p>
-            <p>✓ Ready in seconds</p>
+            <p>✓ Non-custodial & secure</p>
           </div>
         </div>
       </div>

@@ -8,23 +8,30 @@ import { useMemo } from 'react';
  * - Returns wallet address, signing capabilities
  */
 export function useEmbeddedSolWallet() {
-  const { wallets } = useWallets();
+  const { wallets, ready } = useWallets();
 
   const solanaWallet = useMemo(() => {
-    console.log('🔍 Checking wallets:', wallets);
+    console.log('🔍 Checking wallets:', { 
+      count: wallets?.length, 
+      ready,
+      wallets: wallets?.map(w => ({
+        type: w.walletClientType,
+        address: w.address,
+        addressLength: w.address?.length
+      }))
+    });
+    
+    if (!ready) {
+      console.log('⏳ Wallets not ready yet');
+      return null;
+    }
     
     if (!wallets || wallets.length === 0) {
       console.log('❌ No wallets found');
       return null;
     }
     
-    console.log('📋 All wallets:', wallets.map(w => ({
-      type: w.walletClientType,
-      address: w.address,
-      addressLength: w.address?.length
-    })));
-    
-    // Find Solana embedded wallet by Privy client type and Solana address format (32-44 chars)
+    // Find Solana embedded wallet by Privy client type and Solana address format (32-44 chars base58)
     const wallet = wallets.find(
       (w) => w.walletClientType === 'privy' && 
              w.address && 
@@ -33,13 +40,19 @@ export function useEmbeddedSolWallet() {
     );
     
     if (wallet) {
-      console.log('✅ Found Solana wallet:', wallet.address);
+      console.log('✅ Found Solana wallet:', {
+        address: wallet.address,
+        clientType: wallet.walletClientType
+      });
     } else {
-      console.log('❌ No Solana wallet found');
+      console.log('❌ No Solana wallet found in:', wallets.map(w => ({
+        type: w.walletClientType,
+        addr: w.address
+      })));
     }
     
     return wallet || null;
-  }, [wallets]);
+  }, [wallets, ready]);
 
   const address = solanaWallet?.address;
 
@@ -47,6 +60,6 @@ export function useEmbeddedSolWallet() {
     wallet: solanaWallet,
     address,
     hasWallet: !!solanaWallet,
-    isLoading: !wallets,
+    isLoading: !ready,
   };
 }
