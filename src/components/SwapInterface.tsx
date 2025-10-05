@@ -2,11 +2,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowDownUp, Loader2 } from 'lucide-react';
-import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
+import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { VersionedTransaction } from '@solana/web3.js';
-import { sendWithEmbeddedWallet } from '@/lib/solana';
 
 interface SwapInterfaceProps {
   address: string;
@@ -17,7 +16,11 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [isSwapping, setIsSwapping] = useState(false);
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [quote, setQuote] = useState<any>(null);
-  const { wallet } = useEmbeddedSolWallet();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { wallets } = useWallets();
+  
+  // Get the first wallet (should be the embedded Privy wallet)
+  const wallet = wallets && wallets.length > 0 ? wallets[0] : null;
   
   console.log('🎯 SwapInterface state:', {
     address,
@@ -116,17 +119,19 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       const transaction = VersionedTransaction.deserialize(transactionBuf);
 
       console.log('📝 Transaction prepared, signing and sending...');
-      console.log('🔍 Wallet object:', wallet);
-      console.log('🔍 Wallet methods:', wallet ? Object.keys(wallet) : 'no wallet');
 
       toast.loading('Sending transaction...', { id: 'swap' });
 
-      // The wallet object from useEmbeddedSolWallet is just metadata
-      // We need to serialize the transaction and send it via Privy's API
-      const serializedTx = Buffer.from(transaction.serialize()).toString('base64');
+      // Serialize the transaction to Uint8Array as required by Privy
+      const serializedTx = transaction.serialize();
+
+      // Send transaction using Privy's signAndSendTransaction
+      const receipt = await signAndSendTransaction({
+        transaction: serializedTx,
+        wallet: wallet,
+      });
       
-      // @ts-ignore - Use Privy's sendTransaction on the wallet account
-      const signature = await wallet.sendTransaction(serializedTx);
+      const signature = receipt.signature;
 
       console.log('✅ Transaction sent:', signature);
 
