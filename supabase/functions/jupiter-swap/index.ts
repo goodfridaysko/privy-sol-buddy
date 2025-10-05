@@ -33,6 +33,7 @@ serve(async (req) => {
       quoteResponse,
       userPublicKey,
       wrapAndUnwrapSol: true,
+      useSharedAccounts: true, // Enable automatic ATA creation
       dynamicComputeUnitLimit: true,
       dynamicSlippage: true,
       prioritizationFeeLamports: {

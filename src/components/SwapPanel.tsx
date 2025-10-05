@@ -139,6 +139,10 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       
       if (error.message?.includes('User rejected')) {
         toast.error('Transaction rejected');
+      } else if (error.message?.includes('insufficient funds')) {
+        toast.error('Insufficient SOL for swap + ATA creation (~0.002 SOL needed)');
+      } else if (error.message?.includes('account')) {
+        toast.error('Token account error - please try again');
       } else {
         toast.error(error.message || 'Swap failed');
       }
@@ -245,6 +249,9 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
           <div className="flex justify-between">
             <span className="text-muted-foreground">Slippage</span>
             <span>{(SLIPPAGE_BPS / 100).toFixed(2)}%</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground text-[10px] mt-2 pt-2 border-t border-border/50">
+            <span>First swap includes ~0.002 SOL for token account creation</span>
           </div>
         </div>
       )}
