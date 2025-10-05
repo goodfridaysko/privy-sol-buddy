@@ -109,15 +109,12 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       );
 
       toast.info('Building swap transaction...');
-      const transaction = await buildJupiterSwap(freshQuote, address);
+      const transactionBuffer = await buildJupiterSwap(freshQuote, address);
 
       toast.info('Please sign the transaction...');
       
-      // Serialize the transaction for Privy
-      const serializedTransaction = transaction.serialize();
-      
       const receipt = await signAndSendTransaction({
-        transaction: serializedTransaction,
+        transaction: transactionBuffer,
         wallet: solanaWallet,
       });
 

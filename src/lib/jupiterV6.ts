@@ -31,7 +31,7 @@ export interface JupiterQuoteResponse {
 }
 
 interface SwapResponse {
-  swapTransaction: string;
+  swapTransaction: string; // base64 encoded transaction
   lastValidBlockHeight: number;
   prioritizationFeeLamports: number;
 }
@@ -81,11 +81,12 @@ export async function fetchJupiterQuote(
 
 /**
  * Build a swap transaction via Supabase edge function (bypasses DNS issues)
+ * Returns base64 encoded transaction ready for signing
  */
 export async function buildJupiterSwap(
   quote: JupiterQuoteResponse,
   userPublicKey: string
-): Promise<VersionedTransaction> {
+): Promise<Uint8Array> {
   console.log('[Jupiter Swap] Building transaction via edge function:', {
     user: userPublicKey.slice(0, 8) + '...',
   });
@@ -108,9 +109,8 @@ export async function buildJupiterSwap(
 
   console.log('[Jupiter Swap] Transaction built successfully');
 
-  // Deserialize the base64 transaction (browser-compatible)
+  // Convert base64 to Uint8Array for Privy
   const transactionBuf = Uint8Array.from(atob(data.swapTransaction), c => c.charCodeAt(0));
-  const transaction = VersionedTransaction.deserialize(transactionBuf);
 
-  return transaction;
+  return transactionBuf;
 }
