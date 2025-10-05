@@ -9,7 +9,7 @@ import { usePrices } from '@/hooks/usePrices';
 import { buyTokenWithSOL } from '@/lib/pumpPortal';
 import { toast } from 'sonner';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { Connection } from '@solana/web3.js';
+import { Connection, VersionedTransaction } from '@solana/web3.js';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -64,22 +64,39 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         PRIORITY_FEE
       );
 
-      console.log('[SwapPanel] Transaction received from PumpPortal, bytes:', txBytes.length);
-      toast.info('Please approve in Privy wallet...');
-
-      // Sign and send with Privy - pass raw transaction bytes
-      const txResult = await solanaWallet.signAndSendTransaction({
-        chain: 'solana:mainnet',
-        transaction: txBytes
+      console.log('[SwapPanel] Transaction received, deserializing...');
+      
+      // Deserialize to VersionedTransaction
+      const tx = VersionedTransaction.deserialize(txBytes);
+      console.log('[SwapPanel] Transaction deserialized:', {
+        version: tx.version,
+        signatures: tx.signatures.length
       });
 
-      // Extract signature - convert Uint8Array to base58 string if needed
-      const signatureBytes = txResult.signature;
-      const signature = typeof signatureBytes === 'string' 
-        ? signatureBytes 
-        : Buffer.from(signatureBytes).toString('base64');
-        
+      toast.info('Please approve in Privy wallet...');
+
+      // Sign with Privy (just sign, not send)
+      const signResult = await solanaWallet.signTransaction({
+        transaction: tx.serialize()
+      });
+
+      console.log('[SwapPanel] Transaction signed, sending...');
+      
+      // Send the signed transaction manually
+      const signature = await connection.sendRawTransaction(
+        signResult.signedTransaction,
+        {
+          skipPreflight: false,
+          maxRetries: 3,
+        }
+      );
+
       console.log('[SwapPanel] Transaction sent:', signature);
+      toast.info('Confirming transaction...');
+
+      // Wait for confirmation
+      await connection.confirmTransaction(signature, 'confirmed');
+
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction confirmed:', signature);
 
