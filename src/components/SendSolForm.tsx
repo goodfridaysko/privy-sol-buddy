@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { createTransferTransaction, isValidSolanaAddress } from '@/lib/solana';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
@@ -68,46 +66,38 @@ export function SendSolForm({ onSuccess }: SendSolFormProps) {
   };
 
   return (
-    <Card className="bg-gradient-card border-border shadow-card backdrop-blur-sm">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Send className="h-5 w-5" />
-          Send SOL
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="recipient">Recipient Address</Label>
-          <Input
-            id="recipient"
-            placeholder="Enter Solana address"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="bg-muted border-border"
-          />
-        </div>
+    <div className="space-y-4 pt-4">
+      <div className="space-y-2">
+        <Label htmlFor="recipient">Recipient Address</Label>
+        <Input
+          id="recipient"
+          placeholder="Enter Solana address"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="bg-muted border-border"
+        />
+      </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="amount">Amount (SOL)</Label>
-          <Input
-            id="amount"
-            type="number"
-            step="0.001"
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="bg-muted border-border"
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="amount">Amount (SOL)</Label>
+        <Input
+          id="amount"
+          type="number"
+          step="0.001"
+          placeholder="0.00"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="bg-muted border-border"
+        />
+      </div>
 
-        <Button
-          onClick={handleSend}
-          disabled={!to || !amount || sending}
-          className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
-        >
-          {sending ? 'Sending...' : 'Send SOL'}
-        </Button>
-      </CardContent>
-    </Card>
+      <Button
+        onClick={handleSend}
+        disabled={!to || !amount || sending}
+        className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
+      >
+        {sending ? 'Sending...' : 'Send SOL'}
+      </Button>
+    </div>
   );
 }

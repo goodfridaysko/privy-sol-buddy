@@ -1,17 +1,28 @@
+import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { useFund } from '@/hooks/useFund';
 import { Button } from '@/components/ui/button';
-import { WalletCard } from '@/components/WalletCard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { WalletHeader } from '@/components/wallet/WalletHeader';
+import { ActionButtons } from '@/components/wallet/ActionButtons';
+import { TokenList } from '@/components/wallet/TokenList';
+import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
 import { SwapForm } from '@/components/SwapForm';
-import { Wallet, LogOut, Loader2 } from 'lucide-react';
+import { ReceiveModal } from '@/components/wallet/ReceiveModal';
+import { Wallet, Loader2, Image } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
   const { login, logout, ready, authenticated, user } = useAuth();
   const { address, hasWallet } = useEmbeddedSolWallet();
   const { fundWallet } = useFund();
+  
+  const [sendOpen, setSendOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
 
   const handleFund = async () => {
     if (!address) return;
@@ -80,51 +91,76 @@ const Index = () => {
     );
   }
 
-  // Authenticated with wallet - show main UI
+  // Authenticated with wallet - Phantom-like UI
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="rounded-full bg-gradient-primary p-2 shadow-glow">
-              <Wallet className="h-6 w-6 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold">Solana Wallet</h1>
-              <p className="text-sm text-muted-foreground">{user?.email?.address}</p>
-            </div>
-          </div>
-          <Button
-            onClick={logout}
-            variant="outline"
-            className="gap-2"
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
-        </div>
+    <div className="min-h-screen bg-background">
+      <div className="mx-auto max-w-lg">
+        {/* Wallet Header */}
+        <WalletHeader 
+          address={address} 
+          userEmail={user?.email?.address}
+          onLogout={logout}
+        />
 
-        {/* Main Grid */}
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Left Column */}
-          <div className="space-y-6">
-            <WalletCard address={address} onFund={handleFund} />
-            <SendSolForm />
-          </div>
+        {/* Action Buttons */}
+        <ActionButtons
+          onBuy={handleFund}
+          onSend={() => setSendOpen(true)}
+          onReceive={() => setReceiveOpen(true)}
+          onSwap={() => setSwapOpen(true)}
+        />
 
-          {/* Right Column */}
-          <div className="space-y-6">
+        {/* Tabs */}
+        <Tabs defaultValue="tokens" className="mt-4">
+          <TabsList className="w-full grid grid-cols-3 mx-6" style={{ width: 'calc(100% - 3rem)' }}>
+            <TabsTrigger value="tokens">Tokens</TabsTrigger>
+            <TabsTrigger value="nfts">NFTs</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="tokens" className="mt-4">
+            <TokenList address={address} />
+          </TabsContent>
+          
+          <TabsContent value="nfts" className="mt-4">
+            <div className="px-6 py-12 text-center">
+              <Image className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+              <p className="text-muted-foreground mb-1">No NFTs yet</p>
+              <p className="text-sm text-muted-foreground">
+                Your collectibles will appear here
+              </p>
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="activity" className="mt-4">
+            <ActivityTab />
+          </TabsContent>
+        </Tabs>
+
+        {/* Modals */}
+        <Dialog open={sendOpen} onOpenChange={setSendOpen}>
+          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
+            <DialogHeader>
+              <DialogTitle>Send SOL</DialogTitle>
+            </DialogHeader>
+            <SendSolForm onSuccess={() => setSendOpen(false)} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
+          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
+            <DialogHeader>
+              <DialogTitle>Swap Tokens</DialogTitle>
+            </DialogHeader>
             <SwapForm />
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
 
-        {/* Footer Info */}
-        <div className="rounded-lg border border-border bg-card/50 p-4 backdrop-blur-sm">
-          <p className="text-sm text-muted-foreground text-center">
-            Your wallet is self-custodial and encrypted locally. Privy does not have access to your private keys.
-          </p>
-        </div>
+        <ReceiveModal 
+          open={receiveOpen} 
+          onOpenChange={setReceiveOpen}
+          address={address}
+        />
       </div>
     </div>
   );
