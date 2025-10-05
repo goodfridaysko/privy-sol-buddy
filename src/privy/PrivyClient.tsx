@@ -35,7 +35,7 @@ export function PrivyClient({ children }: PrivyClientProps) {
             createOnLogin: 'users-without-wallets',
           },
         },
-        loginMethods: ['email', 'sms', 'wallet'],
+        loginMethods: ['email', 'sms'],
         appearance: {
           theme: 'dark',
           accentColor: '#9333ea',
