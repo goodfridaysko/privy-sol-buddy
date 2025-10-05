@@ -34,6 +34,23 @@ const Index = () => {
     }
   };
 
+  const handleRestart = async () => {
+    try {
+      // Clear all storage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Logout from Privy
+      await logout();
+      
+      // Force reload to clear all cache
+      window.location.reload();
+    } catch (error) {
+      console.error('Restart error:', error);
+      window.location.reload();
+    }
+  };
+
   // Loading state
   if (!ready) {
     return (
@@ -164,7 +181,7 @@ const Index = () => {
         />
 
         {/* Footer */}
-        <WalletFooter onRestart={logout} />
+        <WalletFooter onRestart={handleRestart} />
       </div>
     </div>
   );
