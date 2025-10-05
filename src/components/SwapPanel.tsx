@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { ArrowDown, Loader2, RefreshCw } from 'lucide-react';
 import { TRAPANI_MINT, SOL_MINT, SLIPPAGE_BPS } from '@/config/swap';
 import { useBalance } from '@/hooks/useBalance';
+import { usePrices } from '@/hooks/usePrices';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
 import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
@@ -23,6 +24,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const address = solanaWallet?.address;
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
+  const { sol: solPrice, trapani: trapaniPrice, loading: pricesLoading } = usePrices();
   
   const [inputAmount, setInputAmount] = useState('0.01');
   const [quote, setQuote] = useState<JupiterQuoteResponse | null>(null);
@@ -154,13 +156,23 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
   const priceImpact = quote ? parseFloat(quote.priceImpactPct) : 0;
 
+  // Calculate USD values
+  const inputUsdValue = parseFloat(inputAmount || '0') * solPrice;
+  const outputUsdValue = parseFloat(estimatedOutput) * trapaniPrice;
+
   return (
     <Card className="mx-6 mb-4 p-6 space-y-4">
       <div>
         <h2 className="text-xl font-semibold mb-1">Swap SOL → TRAPANI</h2>
-        <p className="text-sm text-muted-foreground">
-          Balance: {balance.toFixed(4)} SOL
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Balance: {balance.toFixed(4)} SOL
+          </p>
+          <div className="text-xs text-muted-foreground flex gap-3">
+            <span>SOL: ${solPrice.toFixed(2)}</span>
+            <span>TRAPANI: ${trapaniPrice.toFixed(6)}</span>
+          </div>
+        </div>
       </div>
 
       {/* Input */}
@@ -183,7 +195,12 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
             MAX
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">SOL</p>
+        <div className="flex justify-between text-xs">
+          <span className="text-muted-foreground">SOL</span>
+          {!pricesLoading && inputAmount && (
+            <span className="text-muted-foreground">≈ ${inputUsdValue.toFixed(2)}</span>
+          )}
+        </div>
       </div>
 
       <div className="flex justify-center">
@@ -195,7 +212,12 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         <label className="text-sm font-medium">You receive (estimated)</label>
         <div className="p-3 rounded-lg bg-muted/30">
           <p className="text-2xl font-bold">{estimatedOutput}</p>
-          <p className="text-xs text-muted-foreground">TRAPANI</p>
+          <div className="flex justify-between items-center mt-1">
+            <p className="text-xs text-muted-foreground">TRAPANI</p>
+            {!pricesLoading && quote && (
+              <p className="text-xs text-muted-foreground">≈ ${outputUsdValue.toFixed(2)}</p>
+            )}
+          </div>
         </div>
       </div>
 
