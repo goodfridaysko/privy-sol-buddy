@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowDownUp, Loader2, RefreshCw, AlertTriangle, ExternalLink } from 'lucide-react';
+import { ArrowDownUp, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
 import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { usePrices } from '@/hooks/usePrices';
-import { getJupiterQuote, getJupiterSwapTransaction, type JupiterQuote } from '@/lib/jupiter';
+import { getRaydiumQuote, getRaydiumSwapTransaction, type RaydiumQuote } from '@/lib/raydium';
 
 interface SwapInterfaceProps {
   address: string;
@@ -16,23 +16,23 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [amount, setAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
-  const [quote, setQuote] = useState<JupiterQuote | null>(null);
+  const [quote, setQuote] = useState<RaydiumQuote | null>(null);
   const [quoteTimestamp, setQuoteTimestamp] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const { signAndSendTransaction } = useSignAndSendTransaction();
   const { wallets } = useWallets();
   const prices = usePrices();
   
-  // Get the embedded wallet
+  // Get the embedded Privy wallet
   const wallet = wallets?.[0];
 
-  console.log('💼 Wallet state:', {
+  console.log('💼 Swap with embedded wallet:', {
     hasWallet: !!wallet,
     address,
-    walletsCount: wallets?.length
+    walletType: wallet ? 'Privy Embedded' : 'None'
   });
 
-  // Fetch quote from Jupiter
+  // Fetch quote from Raydium
   const fetchQuote = useCallback(async () => {
     const amountNum = parseFloat(amount);
     
@@ -54,7 +54,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       const lamports = Math.floor(amountNum * 1e9);
       
-      const quoteData = await getJupiterQuote(
+      const quoteData = await getRaydiumQuote(
         SOL_MINT,
         TRAPANI_MINT,
         lamports,
@@ -69,7 +69,6 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       const errorMsg = err?.message || 'Failed to fetch quote';
       setError(errorMsg);
       setQuote(null);
-      toast.error(errorMsg);
     } finally {
       setIsFetchingQuote(false);
     }
@@ -95,7 +94,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
 
   const handleSwap = async () => {
     if (!wallet) {
-      toast.error('Wallet not connected');
+      toast.error('Embedded wallet not ready');
       return;
     }
 
@@ -104,7 +103,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       return;
     }
 
-    // Check if quote is stale (older than 30 seconds)
+    // Check if quote is stale
     const quoteAge = Date.now() - quoteTimestamp;
     if (quoteAge > 30000) {
       toast.error('Quote expired, refreshing...');
@@ -116,14 +115,15 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     const toastId = toast.loading('Preparing swap...');
 
     try {
-      console.log('🔄 Building swap transaction...');
+      console.log('🔄 Building swap transaction with Raydium...');
       
-      // Get swap transaction from Jupiter
-      const transaction = await getJupiterSwapTransaction(quote, address);
+      // Build transaction
+      const transaction = await getRaydiumSwapTransaction(quote, address);
 
-      console.log('✍️ Signing and sending transaction...');
+      console.log('✍️ Signing and sending with Privy embedded wallet...');
       toast.loading('Signing transaction...', { id: toastId });
 
+      // Sign and send with Privy
       const receipt = await signAndSendTransaction({
         transaction: transaction.serialize(),
         wallet: wallet,
@@ -153,19 +153,19 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   };
 
   // Calculate display values
-  const outputAmount = quote?.outAmount
-    ? (parseInt(quote.outAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const outputAmount = quote?.data
+    ? (parseInt(quote.data.outputAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
-  const exchangeRate = quote?.outAmount && quote?.inAmount
-    ? (parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
+  const exchangeRate = quote?.data
+    ? (parseInt(quote.data.outputAmount) / parseInt(quote.data.inputAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
-  const priceImpact = quote?.priceImpactPct ?? null;
+  const priceImpact = quote?.data?.priceImpactPct ?? null;
 
   const inputUSD = prices.sol * parseFloat(amount || '0');
-  const outputUSD = quote?.outAmount 
-    ? prices.trapani * (parseInt(quote.outAmount) / 1e5)
+  const outputUSD = quote?.data 
+    ? prices.trapani * (parseInt(quote.data.outputAmount) / 1e5)
     : 0;
 
   const quoteAge = Date.now() - quoteTimestamp;
@@ -174,26 +174,20 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   return (
     <div className="mx-6 my-4 p-6 space-y-4 bg-card rounded-lg border border-border shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Swap</h3>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchQuote}
-            disabled={isFetchingQuote || !amount || parseFloat(amount) <= 0}
-          >
-            <RefreshCw className={`h-4 w-4 ${isFetchingQuote ? 'animate-spin' : ''}`} />
-          </Button>
-          <a
-            href="https://jup.ag"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-          >
-            Powered by Jupiter
-            <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
+        <h3 className="text-lg font-semibold">Swap SOL to $TRAPANI</h3>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={fetchQuote}
+          disabled={isFetchingQuote || !amount || parseFloat(amount) <= 0}
+        >
+          <RefreshCw className={`h-4 w-4 ${isFetchingQuote ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+
+      {/* Wallet Info */}
+      <div className="text-xs text-muted-foreground bg-primary/10 rounded-lg p-2">
+        ✓ Using your embedded Privy wallet
       </div>
 
       {/* Live Prices */}
@@ -269,10 +263,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         {error && (
           <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 rounded-lg p-3">
             <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="font-medium">Error</p>
-              <p className="text-muted-foreground">{error}</p>
-            </div>
+            <p>{error}</p>
           </div>
         )}
 
@@ -336,7 +327,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
               Swapping...
             </>
           ) : !wallet ? (
-            'Connect Wallet'
+            'Wallet Not Ready'
           ) : error ? (
             'Error - Try Again'
           ) : isFetchingQuote ? (
@@ -346,7 +337,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
           ) : !quote ? (
             'Enter Amount'
           ) : (
-            'Swap'
+            'Swap with Embedded Wallet'
           )}
         </Button>
       </div>
