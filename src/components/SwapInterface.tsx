@@ -6,6 +6,7 @@ import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SwapInterfaceProps {
   address: string;
@@ -14,23 +15,40 @@ interface SwapInterfaceProps {
 export function SwapInterface({ address }: SwapInterfaceProps) {
   const [amount, setAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
+  const [isFetchingQuote, setIsFetchingQuote] = useState(false);
   const [quote, setQuote] = useState<any>(null);
   const { wallet } = useEmbeddedSolWallet();
 
   // Fetch quote when amount changes
   useEffect(() => {
-    if (!amount || parseFloat(amount) <= 0) return;
+    if (!amount || parseFloat(amount) <= 0) {
+      setQuote(null);
+      return;
+    }
 
     const fetchQuote = async () => {
+      setIsFetchingQuote(true);
       try {
         const lamports = Math.floor(parseFloat(amount) * 1e9);
-        const response = await fetch(
-          `https://quote-api.jup.ag/v6/quote?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50`
-        );
-        const data = await response.json();
+        
+        const { data, error } = await supabase.functions.invoke('jupiter-quote', {
+          body: {
+            inputMint: SOL_MINT,
+            outputMint: TRAPANI_MINT,
+            amount: lamports,
+            slippageBps: 50,
+          },
+        });
+
+        if (error) throw error;
+        
+        console.log('📊 Quote received:', data);
         setQuote(data);
       } catch (error) {
         console.error('Failed to fetch quote:', error);
+        setQuote(null);
+      } finally {
+        setIsFetchingQuote(false);
       }
     };
 
@@ -49,26 +67,23 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       console.log('🔄 Starting swap...', { amount, quote });
 
-      // Get swap transaction from Jupiter
-      const response = await fetch('https://quote-api.jup.ag/v6/swap', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Get swap transaction from Jupiter via edge function
+      const { data: swapData, error: swapError } = await supabase.functions.invoke('jupiter-swap', {
+        body: {
           quoteResponse: quote,
           userPublicKey: address,
-          wrapAndUnwrapSol: true,
-          dynamicComputeUnitLimit: true,
-          prioritizationFeeLamports: 'auto',
-        }),
+        },
       });
 
-      const { swapTransaction } = await response.json();
+      if (swapError) throw swapError;
+
+      const { swapTransaction } = swapData;
 
       // Deserialize transaction
       const swapTransactionBuf = Buffer.from(swapTransaction, 'base64');
       const transaction = VersionedTransaction.deserialize(swapTransactionBuf);
 
-      console.log('📝 Transaction prepared, sending...');
+      console.log('📝 Transaction prepared, signing and sending...');
 
       // Create connection
       const connection = new Connection('https://api.mainnet-beta.solana.com');
@@ -111,8 +126,8 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   };
 
   const outputAmount = quote 
-    ? (parseInt(quote.outAmount) / 1e5).toFixed(2) 
-    : '0.00';
+    ? (parseInt(quote.outAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : '0';
 
   return (
     <div className="p-6 space-y-4 bg-card rounded-lg border border-border">
@@ -139,19 +154,23 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         {/* Swap Icon */}
         <div className="flex justify-center">
           <div className="p-2 rounded-full bg-accent">
-            <ArrowDownUp className="h-4 w-4" />
+            {isFetchingQuote ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowDownUp className="h-4 w-4" />
+            )}
           </div>
         </div>
 
         {/* Output */}
         <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">You receive</label>
+          <label className="text-sm text-muted-foreground">You receive (estimated)</label>
           <div className="flex items-center gap-2">
             <Input
               type="text"
               value={outputAmount}
               readOnly
-              placeholder="0.00"
+              placeholder="0"
               className="flex-1"
             />
             <span className="text-sm font-medium">$TRAPANI</span>
@@ -161,7 +180,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         {/* Swap Button */}
         <Button
           onClick={handleSwap}
-          disabled={!wallet || !quote || isSwapping || parseFloat(amount) <= 0}
+          disabled={!wallet || !quote || isSwapping || parseFloat(amount) <= 0 || isFetchingQuote}
           className="w-full h-12"
         >
           {isSwapping ? (
@@ -176,7 +195,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
 
         {quote && (
           <p className="text-xs text-center text-muted-foreground">
-            Rate: 1 SOL ≈ {(parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toFixed(0)} $TRAPANI
+            Rate: 1 SOL ≈ {(parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })} $TRAPANI
           </p>
         )}
       </div>
