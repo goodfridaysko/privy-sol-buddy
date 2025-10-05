@@ -32,7 +32,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
         
         // Use Raydium API for quotes (direct browser call)
         const response = await fetch(
-          `https://api-v3.raydium.io/compute/swap-base-in?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50&txVersion=V0`
+          `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${SOL_MINT}&outputMint=${TRAPANI_MINT}&amount=${lamports}&slippageBps=50&txVersion=V0`
         );
         
         if (!response.ok) {
@@ -67,14 +67,14 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       console.log('🔄 Starting Raydium swap...', { amount, quote });
 
       // Get priority fee
-      const priorityFeeResponse = await fetch('https://api-v3.raydium.io/main/auto-fee');
+      const priorityFeeResponse = await fetch('https://transaction-v1.raydium.io/main/auto-fee');
       const priorityFeeData = await priorityFeeResponse.json();
       const priorityFee = String(priorityFeeData.data.default.h); // high priority
 
       console.log('💰 Priority fee:', priorityFee);
 
       // Build swap transaction via Raydium API
-      const swapResponse = await fetch('https://api-v3.raydium.io/transaction/swap-base-in', {
+      const swapResponse = await fetch('https://transaction-v1.raydium.io/transaction/swap-base-in', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
