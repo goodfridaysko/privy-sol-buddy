@@ -1,6 +1,7 @@
 import { PrivyProvider } from '@privy-io/react-auth';
 import { ReactNode, useEffect } from 'react';
 import { PrivySetup } from '@/components/PrivySetup';
+import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
 
 interface PrivyClientProps {
   children: ReactNode;
@@ -38,6 +39,14 @@ export function PrivyClient({ children }: PrivyClientProps) {
         embeddedWallets: {
           solana: {
             createOnLogin: 'users-without-wallets',
+          },
+        },
+        solana: {
+          rpcs: {
+            'solana:mainnet': {
+              rpc: createSolanaRpc('https://api.mainnet-beta.solana.com'),
+              rpcSubscriptions: createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com')
+            },
           },
         },
         loginMethods: ['email', 'sms'],
