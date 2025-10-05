@@ -8,6 +8,7 @@ import { useBalance } from '@/hooks/useBalance';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
 import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
+import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number; outAmount: number }) => void;
@@ -85,10 +86,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       toast.success('Swap successful!');
       
-      // Convert signature to string (it's returned as Uint8Array from Privy)
-      const signatureString = typeof receipt.signature === 'string' 
-        ? receipt.signature 
-        : Buffer.from(receipt.signature).toString('base64');
+      // Convert Uint8Array signature to base58 string
+      const signatureString = bs58.encode(receipt.signature);
       
       if (onSwapResult) {
         onSwapResult({
