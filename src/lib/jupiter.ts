@@ -3,10 +3,9 @@
  * Direct API integration for embedded wallet compatibility
  */
 
-import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction } from '@solana/web3.js';
 import { TRAPANI_MINT, SOL_MINT, SLIPPAGE_BPS } from '@/config/swap';
-
-const JUPITER_API = 'https://quote-api.jup.ag/v6';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface SwapQuote {
   inputMint: string;
@@ -21,7 +20,7 @@ export interface SwapQuote {
 }
 
 /**
- * Get swap quote from Jupiter
+ * Get swap quote from Jupiter via backend proxy
  */
 export async function getSwapQuote(
   inputMint: string,
@@ -30,46 +29,35 @@ export async function getSwapQuote(
 ): Promise<SwapQuote> {
   const lamports = Math.floor(amount * 1_000_000_000);
   
-  const params = new URLSearchParams({
-    inputMint,
-    outputMint,
-    amount: lamports.toString(),
-    slippageBps: SLIPPAGE_BPS.toString(),
+  const { data, error } = await supabase.functions.invoke('jupiter-quote', {
+    body: {
+      inputMint,
+      outputMint,
+      amount: lamports,
+      slippageBps: SLIPPAGE_BPS,
+    },
   });
 
-  const response = await fetch(`${JUPITER_API}/quote?${params}`);
-  if (!response.ok) {
-    throw new Error('Failed to get swap quote');
-  }
-
-  return await response.json();
+  if (error) throw error;
+  return data;
 }
 
 /**
- * Build swap transaction from quote
+ * Build swap transaction from quote via backend proxy
  */
 export async function buildSwapTransaction(
   quote: SwapQuote,
   userPublicKey: string
 ): Promise<string> {
-  const response = await fetch(`${JUPITER_API}/swap`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const { data, error } = await supabase.functions.invoke('jupiter-swap', {
+    body: {
       quoteResponse: quote,
       userPublicKey,
-      wrapAndUnwrapSol: true,
-      dynamicComputeUnitLimit: true,
-      prioritizationFeeLamports: 'auto',
-    }),
+    },
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to build swap transaction');
-  }
-
-  const { swapTransaction } = await response.json();
-  return swapTransaction;
+  if (error) throw error;
+  return data.swapTransaction;
 }
 
 /**
