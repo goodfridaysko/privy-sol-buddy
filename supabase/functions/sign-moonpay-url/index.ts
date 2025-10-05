@@ -29,17 +29,23 @@ serve(async (req) => {
     console.log('🔑 Using API Key:', MOONPAY_API_KEY);
     console.log('🔑 Secret Key length:', MOONPAY_SECRET_KEY.length, 'starts with:', MOONPAY_SECRET_KEY.substring(0, 10));
 
-    // IMPORTANT: For MoonPay, we sign the query string with the original parameter order
-    // without the leading "?" and with values NOT URL-encoded during signing
-    const originalQuery = `?apiKey=${MOONPAY_API_KEY}&currencyCode=sol&walletAddress=${walletAddress}`;
-    const queryToSign = originalQuery.substring(1); // Remove the leading "?"
+    // Build query parameters - MoonPay requires parameter VALUES to be URL-encoded BEFORE signing
+    // Format: ?apiKey=<value>&currencyCode=<value>&walletAddress=<value>
+    const params: Record<string, string> = {
+      apiKey: encodeURIComponent(MOONPAY_API_KEY),
+      currencyCode: encodeURIComponent('sol'),
+      walletAddress: encodeURIComponent(walletAddress),
+    };
+
+    // Build query string without leading "?"
+    const queryString = `apiKey=${params.apiKey}&currencyCode=${params.currencyCode}&walletAddress=${params.walletAddress}`;
     
-    console.log('📝 Query string to sign:', queryToSign);
+    console.log('📝 Query string to sign:', queryString);
     
     // Create HMAC signature using Web Crypto API
     const encoder = new TextEncoder();
     const keyData = encoder.encode(MOONPAY_SECRET_KEY);
-    const messageData = encoder.encode(queryToSign);
+    const messageData = encoder.encode(queryString);
     
     const key = await crypto.subtle.importKey(
       'raw',
@@ -53,9 +59,9 @@ serve(async (req) => {
     const signatureArray = Array.from(new Uint8Array(signatureBuffer));
     const signatureBase64 = btoa(String.fromCharCode(...signatureArray));
 
-    // URL-encode the signature and append to URL
+    // URL-encode the signature and append to URL with leading "?"
     const encodedSignature = encodeURIComponent(signatureBase64);
-    const signedUrl = `https://buy-sandbox.moonpay.com${originalQuery}&signature=${encodedSignature}`;
+    const signedUrl = `https://buy-sandbox.moonpay.com/?${queryString}&signature=${encodedSignature}`;
 
     console.log('🔐 Signed MoonPay URL for wallet:', walletAddress);
     console.log('✅ Full signature:', signatureBase64);
