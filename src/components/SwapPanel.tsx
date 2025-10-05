@@ -49,6 +49,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     setIsLoadingQuote(true);
 
     try {
+      console.log('[SwapPanel] Getting quote for', amountSOL, 'SOL');
       const amountLamports = Math.floor(amountSOL * 1e9);
       const quoteData = await fetchJupiterQuote(
         SOL_MINT,
@@ -56,12 +57,15 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         amountLamports,
         SLIPPAGE_BPS
       );
+      console.log('[SwapPanel] Quote received:', quoteData);
       setQuote(quoteData);
       setCountdown(15); // Reset countdown
       if (!isAutoRefresh) toast.success('Quote updated');
     } catch (error) {
-      console.error('Quote error:', error);
-      if (!isAutoRefresh) toast.error(error instanceof Error ? error.message : 'Failed to fetch quote');
+      console.error('[SwapPanel] Quote error:', error);
+      if (!isAutoRefresh) {
+        toast.error(error instanceof Error ? error.message : 'Failed to fetch quote');
+      }
     } finally {
       setIsLoadingQuote(false);
     }
@@ -99,35 +103,43 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
     try {
       // Fetch fresh quote right before swap
+      console.log('[SwapPanel] Starting swap process...');
       toast.info('Fetching fresh quote...');
       const amountLamports = Math.floor(parseFloat(inputAmount) * 1e9);
+      
+      console.log('[SwapPanel] Fetching quote for', amountLamports, 'lamports');
       const freshQuote = await fetchJupiterQuote(
         SOL_MINT,
         TRAPANI_MINT,
         amountLamports,
         SLIPPAGE_BPS
       );
+      console.log('[SwapPanel] Fresh quote received:', freshQuote);
 
       toast.info('Building swap transaction...');
+      console.log('[SwapPanel] Building transaction for wallet:', address);
       const transactionBuffer = await buildJupiterSwap(freshQuote, address);
 
-      console.log('[Swap] Transaction buffer received:', {
+      console.log('[SwapPanel] Transaction buffer received:', {
         length: transactionBuffer.length,
         type: transactionBuffer.constructor.name,
+        first10Bytes: Array.from(transactionBuffer.slice(0, 10)),
       });
 
       toast.info('Please sign the transaction...');
+      console.log('[SwapPanel] Requesting signature from Privy...');
       
       const receipt = await signAndSendTransaction({
         transaction: transactionBuffer,
         wallet: solanaWallet,
       });
 
-      console.log('[Swap] Receipt received:', receipt);
+      console.log('[SwapPanel] Receipt received:', receipt);
       toast.success('Swap successful!');
       
       // Convert Uint8Array signature to base58 string
       const signatureString = bs58.encode(receipt.signature);
+      console.log('[SwapPanel] Signature:', signatureString);
       
       if (onSwapResult) {
         onSwapResult({
@@ -141,7 +153,12 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       setInputAmount('');
       refetchBalance();
     } catch (error: any) {
-      console.error('Swap error:', error);
+      console.error('[SwapPanel] Swap error:', error);
+      console.error('[SwapPanel] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
       
       if (error.message?.includes('User rejected')) {
         toast.error('Transaction rejected');
@@ -150,7 +167,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       } else if (error.message?.includes('account')) {
         toast.error('Token account error - please try again');
       } else {
-        toast.error(error.message || 'Swap failed');
+        toast.error(error.message || 'Swap failed - check console for details');
       }
     } finally {
       setIsSwapping(false);
