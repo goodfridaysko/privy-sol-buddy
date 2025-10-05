@@ -1,10 +1,9 @@
 /**
- * Jupiter V6 API Integration via Supabase Edge Functions
- * Bypasses DNS/network issues by proxying through edge functions
+ * Jupiter V6 API Integration - Direct Client-Side Calls
+ * All quote and swap calculations happen in the UI for smooth UX with Privy
  */
 
 import { VersionedTransaction } from '@solana/web3.js';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface JupiterQuoteResponse {
   inputMint: string;
@@ -37,7 +36,7 @@ interface SwapResponse {
 }
 
 /**
- * Fetch a swap quote via Supabase edge function (bypasses DNS issues)
+ * Fetch quote directly from Jupiter V6 API (client-side for smooth UX)
  */
 export async function fetchJupiterQuote(
   inputMint: string,
@@ -45,29 +44,42 @@ export async function fetchJupiterQuote(
   amountLamports: number,
   slippageBps: number
 ): Promise<JupiterQuoteResponse> {
-  console.log('[Jupiter Quote] Fetching via edge function:', {
+  console.log('[Jupiter Quote] Fetching directly from API:', {
     inputMint: inputMint.slice(0, 8) + '...',
     outputMint: outputMint.slice(0, 8) + '...',
     amount: amountLamports,
     amountSOL: (amountLamports / 1e9).toFixed(4),
   });
 
-  const { data, error } = await supabase.functions.invoke('jupiter-quote', {
-    body: {
-      inputMint,
-      outputMint,
-      amount: amountLamports,
-      slippageBps,
+  const params = new URLSearchParams({
+    inputMint,
+    outputMint,
+    amount: amountLamports.toString(),
+    slippageBps: slippageBps.toString(),
+    restrictIntermediateTokens: 'true',
+  });
+
+  const url = `https://lite-api.jup.ag/swap/v1/quote?${params}`;
+  console.log('[Jupiter Quote] Calling:', url);
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
     },
   });
 
-  if (error) {
-    console.error('[Jupiter Quote] Error:', error);
-    throw new Error(`Failed to fetch quote: ${error.message}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[Jupiter Quote] API error:', errorText);
+    throw new Error(`Quote failed (${response.status}): ${errorText}`);
   }
 
+  const data = await response.json();
+
   if (!data || !data.inputMint || !data.outputMint) {
-    throw new Error('Invalid quote response');
+    console.error('[Jupiter Quote] Invalid response:', data);
+    throw new Error('Invalid quote response from Jupiter');
   }
 
   console.log('[Jupiter Quote] Success:', {
@@ -80,31 +92,55 @@ export async function fetchJupiterQuote(
 }
 
 /**
- * Build a swap transaction via Supabase edge function (bypasses DNS issues)
- * Returns base64 encoded transaction ready for signing
+ * Build swap transaction directly from Jupiter V6 API (client-side for smooth UX)
+ * Returns base64 encoded transaction ready for signing with Privy
  */
 export async function buildJupiterSwap(
   quote: JupiterQuoteResponse,
   userPublicKey: string
 ): Promise<Uint8Array> {
-  console.log('[Jupiter Swap] Building transaction via edge function:', {
+  console.log('[Jupiter Swap] Building transaction directly from API:', {
     user: userPublicKey.slice(0, 8) + '...',
+    inAmount: quote.inAmount,
+    outAmount: quote.outAmount,
   });
 
-  const { data, error } = await supabase.functions.invoke('jupiter-swap', {
-    body: {
-      quoteResponse: quote,
-      userPublicKey,
+  const swapBody = {
+    quoteResponse: quote,
+    userPublicKey,
+    wrapAndUnwrapSol: true,
+    useSharedAccounts: true, // Auto-create ATA if needed (~0.002 SOL)
+    dynamicComputeUnitLimit: true,
+    dynamicSlippage: true,
+    prioritizationFeeLamports: {
+      priorityLevelWithMaxLamports: {
+        maxLamports: 1000000,
+        priorityLevel: "veryHigh"
+      }
+    }
+  };
+
+  console.log('[Jupiter Swap] Calling Jupiter swap API...');
+  const response = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
     },
+    body: JSON.stringify(swapBody),
   });
 
-  if (error) {
-    console.error('[Jupiter Swap] Error:', error);
-    throw new Error(`Failed to build swap: ${error.message}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[Jupiter Swap] API error:', errorText);
+    throw new Error(`Swap failed (${response.status}): ${errorText}`);
   }
 
+  const data = await response.json();
+  
   if (!data || !data.swapTransaction) {
-    throw new Error('Invalid swap transaction response');
+    console.error('[Jupiter Swap] Invalid response:', data);
+    throw new Error('Invalid swap transaction response from Jupiter');
   }
 
   console.log('[Jupiter Swap] Transaction built successfully');
