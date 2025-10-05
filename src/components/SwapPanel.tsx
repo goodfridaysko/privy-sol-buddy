@@ -100,7 +100,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     ? (parseInt(quote.outAmount) / 1e6).toFixed(2)
     : '0';
 
-  const priceImpact = quote ? quote.priceImpactPct : 0;
+  const priceImpact = quote ? parseFloat(quote.priceImpactPct) : 0;
 
   return (
     <Card className="mx-6 mb-4 p-6 space-y-4">

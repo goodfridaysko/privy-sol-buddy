@@ -14,7 +14,7 @@ export interface JupiterQuoteResponse {
   otherAmountThreshold: string;
   swapMode: string;
   slippageBps: number;
-  priceImpactPct: number;
+  priceImpactPct: string; // Changed from number to string to match API response
   routePlan: Array<{
     swapInfo: {
       ammKey: string;
