@@ -108,8 +108,8 @@ export async function buildJupiterSwap(
 
   console.log('[Jupiter Swap] Transaction built successfully');
 
-  // Deserialize the base64 transaction
-  const transactionBuf = Buffer.from(data.swapTransaction, 'base64');
+  // Deserialize the base64 transaction (browser-compatible)
+  const transactionBuf = Uint8Array.from(atob(data.swapTransaction), c => c.charCodeAt(0));
   const transaction = VersionedTransaction.deserialize(transactionBuf);
 
   return transaction;
