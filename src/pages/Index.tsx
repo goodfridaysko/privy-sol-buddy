@@ -12,7 +12,7 @@ import { ActionButtons } from '@/components/wallet/ActionButtons';
 import { TokenList } from '@/components/wallet/TokenList';
 import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
-import { SwapForm } from '@/components/SwapForm';
+import { JupiterSwapButton } from '@/components/JupiterSwapButton';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
 import { MoonPayModal } from '@/components/MoonPayModal';
 import { Wallet, Loader2, Image, CreditCard } from 'lucide-react';
@@ -34,7 +34,6 @@ const Index = () => {
   });
   
   const [sendOpen, setSendOpen] = useState(false);
-  const [swapOpen, setSwapOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [walletCreated, setWalletCreated] = useState(false);
 
@@ -158,7 +157,7 @@ const Index = () => {
         />
 
         {/* Prominent Buy Button */}
-        <div className="px-6 py-4">
+        <div className="px-6 py-4 space-y-3">
           <Button 
             onClick={handleFund}
             size="lg"
@@ -167,8 +166,9 @@ const Index = () => {
             <CreditCard className="mr-2 h-6 w-6" />
             Buy Crypto with Card
           </Button>
-          <p className="text-xs text-center text-muted-foreground mt-2">
-            Powered by MoonPay • Test Mode Active
+          <JupiterSwapButton address={address} />
+          <p className="text-xs text-center text-muted-foreground">
+            Powered by MoonPay & Jupiter • Test Mode Active
           </p>
         </div>
 
@@ -177,7 +177,7 @@ const Index = () => {
           onBuy={handleFund}
           onSend={() => setSendOpen(true)}
           onReceive={() => setReceiveOpen(true)}
-          onSwap={() => setSwapOpen(true)}
+          onSwap={() => {}}
         />
 
         {/* Tabs */}
@@ -217,16 +217,7 @@ const Index = () => {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
-          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
-            <DialogHeader>
-              <DialogTitle>Swap Tokens</DialogTitle>
-            </DialogHeader>
-            <SwapForm />
-          </DialogContent>
-        </Dialog>
-
-        <ReceiveModal 
+        <ReceiveModal
           open={receiveOpen} 
           onOpenChange={setReceiveOpen}
           address={address}
