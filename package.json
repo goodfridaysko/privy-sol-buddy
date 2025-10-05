@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
+    "@jup-ag/api": "^6.0.44",
     "@moonpay/moonpay-js": "^0.7.5",
     "@privy-io/react-auth": "^3.0.1",
     "@radix-ui/react-accordion": "^1.2.11",

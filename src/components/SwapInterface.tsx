@@ -5,9 +5,8 @@ import { ArrowDownUp, Loader2, RefreshCw, AlertTriangle, ExternalLink } from 'lu
 import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
-import { VersionedTransaction } from '@solana/web3.js';
 import { usePrices } from '@/hooks/usePrices';
-import { supabase } from '@/integrations/supabase/client';
+import { getJupiterQuote, getJupiterSwapTransaction, type JupiterQuote } from '@/lib/jupiter';
 
 interface SwapInterfaceProps {
   address: string;
@@ -17,7 +16,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [amount, setAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
   const [isFetchingQuote, setIsFetchingQuote] = useState(false);
-  const [quote, setQuote] = useState<any>(null);
+  const [quote, setQuote] = useState<JupiterQuote | null>(null);
   const [quoteTimestamp, setQuoteTimestamp] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const { signAndSendTransaction } = useSignAndSendTransaction();
@@ -33,7 +32,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     walletsCount: wallets?.length
   });
 
-  // Fetch quote from Jupiter via edge function
+  // Fetch quote from Jupiter
   const fetchQuote = useCallback(async () => {
     const amountNum = parseFloat(amount);
     
@@ -55,44 +54,14 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       const lamports = Math.floor(amountNum * 1e9);
       
-      console.log('📊 Fetching quote...', {
-        amount: amountNum,
+      const quoteData = await getJupiterQuote(
+        SOL_MINT,
+        TRAPANI_MINT,
         lamports,
-        inputMint: SOL_MINT,
-        outputMint: TRAPANI_MINT
-      });
+        50
+      );
 
-      const { data, error: fetchError } = await supabase.functions.invoke('jupiter-quote', {
-        body: {
-          inputMint: SOL_MINT,
-          outputMint: TRAPANI_MINT,
-          amount: lamports,
-          slippageBps: 50
-        }
-      });
-
-      if (fetchError) {
-        console.error('❌ Quote fetch error:', fetchError);
-        throw new Error(fetchError.message || 'Failed to fetch quote');
-      }
-
-      if (data?.error) {
-        console.error('❌ Quote API error:', data.error);
-        throw new Error(data.error);
-      }
-
-      if (!data || !data.inAmount || !data.outAmount) {
-        console.error('❌ Invalid quote data:', data);
-        throw new Error('Invalid quote response');
-      }
-      
-      console.log('✅ Quote received:', {
-        inAmount: data.inAmount,
-        outAmount: data.outAmount,
-        priceImpact: data.priceImpactPct
-      });
-
-      setQuote(data);
+      setQuote(quoteData);
       setQuoteTimestamp(Date.now());
       setError(null);
     } catch (err: any) {
@@ -149,35 +118,8 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     try {
       console.log('🔄 Building swap transaction...');
       
-      // Get swap transaction from Jupiter via edge function
-      const { data, error: swapError } = await supabase.functions.invoke('jupiter-swap', {
-        body: {
-          quoteResponse: quote,
-          userPublicKey: address
-        }
-      });
-
-      if (swapError) {
-        console.error('❌ Swap error:', swapError);
-        throw new Error(swapError.message || 'Failed to build swap transaction');
-      }
-
-      if (data?.error) {
-        console.error('❌ Swap API error:', data.error);
-        throw new Error(data.error);
-      }
-
-      const { swapTransaction } = data;
-      
-      if (!swapTransaction) {
-        throw new Error('No transaction returned from Jupiter');
-      }
-
-      console.log('📝 Transaction received, deserializing...');
-      
-      // Decode base64 transaction
-      const transactionBuf = Uint8Array.from(atob(swapTransaction), c => c.charCodeAt(0));
-      const transaction = VersionedTransaction.deserialize(transactionBuf);
+      // Get swap transaction from Jupiter
+      const transaction = await getJupiterSwapTransaction(quote, address);
 
       console.log('✍️ Signing and sending transaction...');
       toast.loading('Signing transaction...', { id: toastId });
@@ -210,7 +152,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     }
   };
 
-  // Calculate display values (Jupiter format)
+  // Calculate display values
   const outputAmount = quote?.outAmount
     ? (parseInt(quote.outAmount) / 1e5).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
@@ -219,9 +161,7 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
     ? (parseInt(quote.outAmount) / parseInt(quote.inAmount) * 1e4).toLocaleString('en-US', { maximumFractionDigits: 0 })
     : '0';
 
-  const priceImpact = quote?.priceImpactPct
-    ? parseFloat(quote.priceImpactPct)
-    : null;
+  const priceImpact = quote?.priceImpactPct ?? null;
 
   const inputUSD = prices.sol * parseFloat(amount || '0');
   const outputUSD = quote?.outAmount 
