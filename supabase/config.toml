@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.get-sol-balance]
 verify_jwt = false
+
+[functions.jupiter-quote]
+verify_jwt = false
+
+[functions.jupiter-swap]
+verify_jwt = false
