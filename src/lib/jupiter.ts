@@ -105,5 +105,5 @@ export const TOKEN_MINTS = {
   SOL: 'So11111111111111111111111111111111111111112',
   USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   USDT: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
-  // Add more tokens as needed
+  TRAPANI: 'Hq1sM1Tc8nepd63th9L2Np3WYJ6TUY1pbwYSKmAjpump',
 };

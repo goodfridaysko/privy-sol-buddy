@@ -9,11 +9,12 @@ import { toast } from 'sonner';
 import { getSwapQuote, executeSwap, TOKEN_MINTS } from '@/lib/jupiter';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { VersionedTransaction } from '@solana/web3.js';
+import trapaniIcon from '@/assets/trapani-coin.png';
 
 export function SwapForm() {
   const { wallet, address } = useEmbeddedSolWallet();
   const [fromToken, setFromToken] = useState(TOKEN_MINTS.SOL);
-  const [toToken, setToToken] = useState(TOKEN_MINTS.USDC);
+  const [toToken, setToToken] = useState(TOKEN_MINTS.TRAPANI);
   const [amount, setAmount] = useState('');
   const [swapping, setSwapping] = useState(false);
 
@@ -89,7 +90,18 @@ export function SwapForm() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={TOKEN_MINTS.SOL}>SOL</SelectItem>
+                <SelectItem value={TOKEN_MINTS.SOL}>
+                  <div className="flex items-center gap-2">
+                    <span>◎</span>
+                    <span>SOL</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value={TOKEN_MINTS.TRAPANI}>
+                  <div className="flex items-center gap-2">
+                    <img src={trapaniIcon} alt="TRAPANI" className="w-4 h-4 rounded-full" />
+                    <span>TRAPANI</span>
+                  </div>
+                </SelectItem>
                 <SelectItem value={TOKEN_MINTS.USDC}>USDC</SelectItem>
                 <SelectItem value={TOKEN_MINTS.USDT}>USDT</SelectItem>
               </SelectContent>
@@ -124,7 +136,18 @@ export function SwapForm() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={TOKEN_MINTS.SOL}>SOL</SelectItem>
+              <SelectItem value={TOKEN_MINTS.SOL}>
+                <div className="flex items-center gap-2">
+                  <span>◎</span>
+                  <span>SOL</span>
+                </div>
+              </SelectItem>
+              <SelectItem value={TOKEN_MINTS.TRAPANI}>
+                <div className="flex items-center gap-2">
+                  <img src={trapaniIcon} alt="TRAPANI" className="w-4 h-4 rounded-full" />
+                  <span>TRAPANI</span>
+                </div>
+              </SelectItem>
               <SelectItem value={TOKEN_MINTS.USDC}>USDC</SelectItem>
               <SelectItem value={TOKEN_MINTS.USDT}>USDT</SelectItem>
             </SelectContent>
