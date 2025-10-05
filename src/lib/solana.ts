@@ -52,6 +52,10 @@ export function isValidSolanaAddress(address: string): boolean {
 
 /**
  * Create a SOL transfer transaction
+ * @param from - Sender's public key
+ * @param to - Recipient's address (base58 string)
+ * @param amountSol - Amount in SOL
+ * @returns Promise<Transaction> - Unsigned transaction ready to send
  */
 export async function createTransferTransaction(
   from: PublicKey,
