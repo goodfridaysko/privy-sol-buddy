@@ -13,13 +13,14 @@ import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
 import { SwapForm } from '@/components/SwapForm';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
+import { MoonPayModal } from '@/components/MoonPayModal';
 import { Wallet, Loader2, Image, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Index = () => {
   const { login, logout, ready, authenticated, user } = useAuth();
   const { address, hasWallet, isLoading } = useEmbeddedSolWallet();
-  const { fundWallet } = useFund();
+  const { fundWallet, showMoonPay, fundingAddress, closeFundingFlow } = useFund();
   
   console.log('🎯 Index state:', {
     ready,
@@ -46,18 +47,9 @@ const Index = () => {
     }
   }, [hasWallet, address, walletCreated]);
 
-  const handleFund = async () => {
+  const handleFund = () => {
     if (!address) return;
-    try {
-      console.log('💳 Opening MoonPay for wallet:', address);
-      await fundWallet(address);
-      toast.success('MoonPay opened', {
-        description: 'Test mode enabled - use test cards'
-      });
-    } catch (error) {
-      console.error('Fund error:', error);
-      toast.error('Failed to open funding flow');
-    }
+    fundWallet(address);
   };
 
   const handleRestart = async () => {
@@ -236,6 +228,12 @@ const Index = () => {
           open={receiveOpen} 
           onOpenChange={setReceiveOpen}
           address={address}
+        />
+
+        <MoonPayModal
+          open={showMoonPay}
+          onOpenChange={closeFundingFlow}
+          walletAddress={fundingAddress}
         />
 
         {/* Footer */}
