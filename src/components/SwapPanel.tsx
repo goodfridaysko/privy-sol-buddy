@@ -4,20 +4,24 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ArrowDown, Loader2 } from 'lucide-react';
 import { TRAPANI_MINT, SOL_MINT, SLIPPAGE_BPS } from '@/config/swap';
-import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { useBalance } from '@/hooks/useBalance';
 import { fetchJupiterQuote, buildJupiterSwap, type JupiterQuoteResponse } from '@/lib/jupiterV6';
 import { toast } from 'sonner';
-import { useSignAndSendTransaction } from '@privy-io/react-auth/solana';
+import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number; outAmount: number }) => void;
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { address, wallet } = useEmbeddedSolWallet();
-  const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { wallets } = useWallets();
+  
+  // Get first Solana wallet (Privy's useWallets from solana import only returns Solana wallets)
+  const solanaWallet = wallets[0];
+  const address = solanaWallet?.address;
+  
+  const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   
   const [inputAmount, setInputAmount] = useState('0.01');
   const [quote, setQuote] = useState<JupiterQuoteResponse | null>(null);
@@ -58,7 +62,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   };
 
   const handleSwap = async () => {
-    if (!quote || !address || !wallet) {
+    if (!quote || !address || !solanaWallet) {
       toast.error('Missing quote or wallet');
       return;
     }
@@ -76,7 +80,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       
       const receipt = await signAndSendTransaction({
         transaction: serializedTransaction,
-        wallet: wallet as any, // Privy wallet type
+        wallet: solanaWallet,
       });
 
       toast.success('Swap successful!');
