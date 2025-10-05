@@ -71,21 +71,30 @@ export async function getQuote(params: QuoteParams): Promise<QuoteResponse> {
       url.searchParams.append('onlyDirectRoutes', 'false');
       url.searchParams.append('asLegacyTransaction', 'false');
 
-      console.log('🔍 Fetching Jupiter quote:', url.toString());
+      console.log('🔍 Fetching Jupiter quote, attempt', attempt + 1);
+      console.log('URL:', url.toString());
 
       const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
         },
+        mode: 'cors',
+      }).catch(err => {
+        console.error('Fetch error:', err);
+        throw new Error(`Network error: ${err.message}`);
       });
+
+      console.log('Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Response error:', errorText);
         throw new Error(`Jupiter quote API error: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('Quote data received:', data);
       
       if (!data.outAmount || data.outAmount === '0') {
         throw new Error('No valid route found for this swap');
@@ -95,15 +104,22 @@ export async function getQuote(params: QuoteParams): Promise<QuoteResponse> {
       return data as QuoteResponse;
     } catch (error) {
       lastError = error as Error;
-      console.error(`Quote attempt ${attempt + 1} failed:`, error);
+      console.error(`❌ Quote attempt ${attempt + 1} failed:`, error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
       
       if (attempt < maxRetries - 1) {
-        // Wait before retry (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        const waitTime = 1000 * Math.pow(2, attempt);
+        console.log(`⏳ Retrying in ${waitTime}ms...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
   }
 
+  console.error('❌ All retry attempts failed');
   throw lastError || new Error('Failed to get quote after retries');
 }
 
