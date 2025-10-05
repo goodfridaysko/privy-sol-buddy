@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WalletHeader } from '@/components/wallet/WalletHeader';
+import { WalletFooter } from '@/components/wallet/WalletFooter';
 import { ActionButtons } from '@/components/wallet/ActionButtons';
 import { TokenList } from '@/components/wallet/TokenList';
 import { ActivityTab } from '@/components/wallet/ActivityTab';
@@ -161,6 +162,9 @@ const Index = () => {
           onOpenChange={setReceiveOpen}
           address={address}
         />
+
+        {/* Footer */}
+        <WalletFooter onRestart={logout} />
       </div>
     </div>
   );
