@@ -1,11 +1,12 @@
 /**
  * Jupiter V6 Swap Integration
- * Direct API integration for embedded wallet compatibility
+ * Direct API calls from browser (production-ready)
  */
 
 import { VersionedTransaction } from '@solana/web3.js';
 import { TRAPANI_MINT, SOL_MINT, SLIPPAGE_BPS } from '@/config/swap';
-import { supabase } from '@/integrations/supabase/client';
+
+const JUPITER_API = 'https://quote-api.jup.ag/v6';
 
 export interface SwapQuote {
   inputMint: string;
@@ -20,7 +21,7 @@ export interface SwapQuote {
 }
 
 /**
- * Get swap quote from Jupiter via backend proxy
+ * Get swap quote from Jupiter API (direct browser call)
  */
 export async function getSwapQuote(
   inputMint: string,
@@ -29,35 +30,57 @@ export async function getSwapQuote(
 ): Promise<SwapQuote> {
   const lamports = Math.floor(amount * 1_000_000_000);
   
-  const { data, error } = await supabase.functions.invoke('jupiter-quote', {
-    body: {
-      inputMint,
-      outputMint,
-      amount: lamports,
-      slippageBps: SLIPPAGE_BPS,
-    },
+  const params = new URLSearchParams({
+    inputMint,
+    outputMint,
+    amount: lamports.toString(),
+    slippageBps: SLIPPAGE_BPS.toString(),
   });
 
-  if (error) throw error;
-  return data;
+  console.log('🔍 Fetching Jupiter quote...');
+  const response = await fetch(`${JUPITER_API}/quote?${params}`);
+  
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Jupiter API error:', error);
+    throw new Error(`Failed to get quote: ${error}`);
+  }
+
+  const quote = await response.json();
+  console.log('✅ Got quote:', quote);
+  return quote;
 }
 
 /**
- * Build swap transaction from quote via backend proxy
+ * Build swap transaction from quote (direct browser call)
  */
 export async function buildSwapTransaction(
   quote: SwapQuote,
   userPublicKey: string
 ): Promise<string> {
-  const { data, error } = await supabase.functions.invoke('jupiter-swap', {
-    body: {
+  console.log('🔨 Building swap transaction...');
+  
+  const response = await fetch(`${JUPITER_API}/swap`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       quoteResponse: quote,
       userPublicKey,
-    },
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      prioritizationFeeLamports: 'auto',
+    }),
   });
 
-  if (error) throw error;
-  return data.swapTransaction;
+  if (!response.ok) {
+    const error = await response.text();
+    console.error('Jupiter swap API error:', error);
+    throw new Error(`Failed to build transaction: ${error}`);
+  }
+
+  const { swapTransaction } = await response.json();
+  console.log('✅ Transaction built');
+  return swapTransaction;
 }
 
 /**
