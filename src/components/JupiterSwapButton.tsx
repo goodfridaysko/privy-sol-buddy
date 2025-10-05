@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { toast } from 'sonner';
+import { PublicKey } from '@solana/web3.js';
 
 declare global {
   interface Window {
@@ -18,7 +19,6 @@ export function JupiterSwapButton() {
   const { wallets } = useWallets();
   const solanaWallet = wallets[0];
   const scriptLoaded = useRef(false);
-  const jupiterInitialized = useRef(false);
 
   useEffect(() => {
     if (scriptLoaded.current) return;
@@ -50,7 +50,26 @@ export function JupiterSwapButton() {
     console.log('[Jupiter Terminal] Using Privy wallet:', solanaWallet.address);
 
     try {
-      // Initialize Jupiter Terminal with Privy wallet
+      // Create a wallet adapter compatible object from Privy wallet
+      const walletAdapter = {
+        publicKey: new PublicKey(solanaWallet.address),
+        signTransaction: async (transaction: any) => {
+          const result = await solanaWallet.signTransaction({ transaction });
+          return result.signedTransaction;
+        },
+        signAllTransactions: async (transactions: any[]) => {
+          const results = await Promise.all(
+            transactions.map(tx => solanaWallet.signTransaction({ transaction: tx }))
+          );
+          return results.map(r => r.signedTransaction);
+        },
+        signMessage: async (message: Uint8Array) => {
+          const result = await solanaWallet.signMessage({ message });
+          return result.signature;
+        },
+      };
+
+      // Initialize Jupiter Terminal with the wallet adapter
       window.Jupiter.init({
         displayMode: 'modal',
         integratedTargetId: 'integrated-terminal',
@@ -63,8 +82,8 @@ export function JupiterSwapButton() {
           initialAmount: '10000000', // 0.01 SOL
         },
         
-        // Pass Privy wallet
-        passThroughWallet: solanaWallet,
+        // Pass the wallet adapter
+        wallet: walletAdapter,
         
         // Callbacks
         onSuccess: ({ txid }: { txid: string }) => {
@@ -80,8 +99,6 @@ export function JupiterSwapButton() {
           });
         },
       });
-
-      jupiterInitialized.current = true;
     } catch (error) {
       console.error('[Jupiter Terminal] Init error:', error);
       toast.error('Failed to open swap interface');
