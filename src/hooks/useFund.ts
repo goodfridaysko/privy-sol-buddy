@@ -1,7 +1,7 @@
-import { useFundWallet } from '@privy-io/react-auth';
+import { useFundWallet } from '@privy-io/react-auth/solana';
 
 /**
- * useFund: Wrapper for Privy's funding flow with MoonPay
+ * useFund: Wrapper for Privy's Solana funding flow with MoonPay
  * - Opens MoonPay widget for on-ramp (test mode enabled)
  * - Supports credit/debit card purchases
  * - Funds the embedded Solana wallet directly
@@ -10,14 +10,14 @@ export function useFund() {
   const { fundWallet } = useFundWallet();
 
   /**
-   * Open MoonPay funding flow
+   * Open MoonPay funding flow for Solana
    * @param address - Solana wallet address to fund
    */
   const openFundingFlow = async (address: string) => {
     try {
-      console.log('🚀 Opening MoonPay funding flow for:', address);
+      console.log('🚀 Opening MoonPay funding flow for Solana wallet:', address);
       
-      // Open MoonPay (test mode configured in PrivyProvider)
+      // Open MoonPay for Solana (test mode configured in PrivyProvider)
       await fundWallet({ address });
       
       console.log('✅ MoonPay modal opened successfully');
