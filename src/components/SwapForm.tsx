@@ -32,6 +32,8 @@ export function SwapForm() {
       return;
     }
 
+    console.log('🚀 Starting swap:', { amount: amountNum, from: 'SOL', to: 'TRAPANI' });
+    
     setIsSwapping(true);
     try {
       const signature = await executeSwap(
@@ -42,6 +44,7 @@ export function SwapForm() {
         TRAPANI_MINT
       );
 
+      console.log('✅ Swap completed:', signature);
       toast.success('Swap successful!', {
         description: `Swapped ${amount} SOL to TRAPANI`,
         action: {
@@ -53,7 +56,7 @@ export function SwapForm() {
       setAmount('');
       refetch();
     } catch (error: any) {
-      console.error('Swap failed:', error);
+      console.error('❌ Swap failed:', error);
       toast.error('Swap failed', {
         description: error?.message || 'Unknown error',
       });
