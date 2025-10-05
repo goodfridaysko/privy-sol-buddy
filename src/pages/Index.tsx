@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { useFund } from '@/hooks/useFund';
+import { useBalance } from '@/hooks/useBalance';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,6 +22,7 @@ const Index = () => {
   const { login, logout, ready, authenticated, user } = useAuth();
   const { address, hasWallet, isLoading } = useEmbeddedSolWallet();
   const { fundWallet, showMoonPay, fundingAddress, closeFundingFlow } = useFund();
+  const { refetch: refetchBalance } = useBalance(address);
   
   console.log('🎯 Index state:', {
     ready,
@@ -234,6 +236,13 @@ const Index = () => {
           open={showMoonPay}
           onOpenChange={closeFundingFlow}
           walletAddress={fundingAddress}
+          onDepositComplete={() => {
+            console.log('💰 Deposit completed, refreshing balance...');
+            refetchBalance();
+            toast.success('Checking for deposit...', {
+              description: 'Balance will update shortly'
+            });
+          }}
         />
 
         {/* Footer */}

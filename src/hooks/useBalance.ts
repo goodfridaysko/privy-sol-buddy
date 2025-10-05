@@ -3,7 +3,7 @@ import { getBalance } from '@/lib/solana';
 
 /**
  * useBalance: Fetch and monitor SOL balance for an address
- * - Auto-refreshes every 10 seconds
+ * - Auto-refreshes every 5 seconds
  * - Returns balance in SOL (not lamports)
  */
 export function useBalance(address: string | undefined) {
@@ -14,6 +14,6 @@ export function useBalance(address: string | undefined) {
       return getBalance(address);
     },
     enabled: !!address,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds for faster updates
   });
 }

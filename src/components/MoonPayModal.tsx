@@ -7,6 +7,7 @@ interface MoonPayModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   walletAddress: string;
+  onDepositComplete?: () => void;
 }
 
 /**
@@ -15,7 +16,14 @@ interface MoonPayModalProps {
  * - Supports cash-to-crypto deposits via credit/debit card
  * - Test mode enabled
  */
-export function MoonPayModal({ open, onOpenChange, walletAddress }: MoonPayModalProps) {
+export function MoonPayModal({ open, onOpenChange, walletAddress, onDepositComplete }: MoonPayModalProps) {
+  const handleClose = (newOpen: boolean) => {
+    onOpenChange(newOpen);
+    if (!newOpen && onDepositComplete) {
+      // Trigger balance refresh when modal closes
+      onDepositComplete();
+    }
+  };
   const [moonPayUrl, setMoonPayUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +60,7 @@ export function MoonPayModal({ open, onOpenChange, walletAddress }: MoonPayModal
   }, [open, walletAddress]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-[500px] h-[700px] p-0 overflow-hidden">
         {isLoading && (
           <div className="flex items-center justify-center h-full">
