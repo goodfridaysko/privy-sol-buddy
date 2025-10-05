@@ -35,7 +35,7 @@ serve(async (req) => {
       throw new Error('Amount too small (minimum 0.001 SOL)');
     }
 
-    const url = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps || 50}`;
+    const url = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${slippageBps || 50}&restrictIntermediateTokens=true`;
     console.log('🔗 Calling Jupiter API (lite-api v1):', url);
 
     const response = await fetch(url, {

@@ -34,9 +34,12 @@ serve(async (req) => {
       userPublicKey,
       wrapAndUnwrapSol: true,
       dynamicComputeUnitLimit: true,
-      priorityLevelWithMaxLamports: {
-        maxLamports: 10000000,
-        priorityLevel: "high"
+      dynamicSlippage: true,
+      prioritizationFeeLamports: {
+        priorityLevelWithMaxLamports: {
+          maxLamports: 1000000,
+          priorityLevel: "veryHigh"
+        }
       }
     };
 
