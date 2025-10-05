@@ -2,11 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowDownUp, Loader2, RefreshCw, AlertTriangle } from 'lucide-react';
-import { useSignAndSendTransaction, useWallets } from '@privy-io/react-auth/solana';
 import { toast } from 'sonner';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { usePrices } from '@/hooks/usePrices';
 import { getRaydiumQuote, getRaydiumSwapTransaction, type RaydiumQuote } from '@/lib/raydium';
+import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 
 interface SwapInterfaceProps {
   address: string;
@@ -19,17 +19,15 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
   const [quote, setQuote] = useState<RaydiumQuote | null>(null);
   const [quoteTimestamp, setQuoteTimestamp] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
-  const { signAndSendTransaction } = useSignAndSendTransaction();
-  const { wallets } = useWallets();
   const prices = usePrices();
   
-  // Get the embedded Privy wallet
-  const wallet = wallets?.[0];
+  // Get the embedded Privy wallet (same as SendSolForm)
+  const { wallet } = useEmbeddedSolWallet();
 
   console.log('💼 Swap with embedded wallet:', {
     hasWallet: !!wallet,
     address,
-    walletType: wallet ? 'Privy Embedded' : 'None'
+    walletReady: wallet ? 'YES' : 'NO'
   });
 
   // Fetch quote from Raydium
@@ -123,20 +121,18 @@ export function SwapInterface({ address }: SwapInterfaceProps) {
       console.log('✍️ Signing and sending with Privy embedded wallet...');
       toast.loading('Signing transaction...', { id: toastId });
 
-      // Sign and send with Privy
-      const receipt = await signAndSendTransaction({
-        transaction: transaction.serialize(),
-        wallet: wallet,
-      });
+      // Sign and send with embedded wallet (same as SendSolForm)
+      // @ts-ignore - Privy wallet types
+      const signature = await wallet.sendTransaction(transaction);
 
-      console.log('✅ Swap successful!', receipt.signature);
+      console.log('✅ Swap successful!', signature);
 
       toast.success('Swap successful!', {
         id: toastId,
         description: `Swapped ${amount} SOL for $TRAPANI`,
         action: {
           label: 'View',
-          onClick: () => window.open(`https://solscan.io/tx/${receipt.signature}`, '_blank'),
+          onClick: () => window.open(`https://solscan.io/tx/${signature}`, '_blank'),
         },
       });
 
