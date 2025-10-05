@@ -63,16 +63,26 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   };
 
   const handleSwap = async () => {
-    if (!quote || !address || !solanaWallet) {
-      toast.error('Missing quote or wallet');
+    if (!address || !solanaWallet || !inputAmount) {
+      toast.error('Missing wallet or amount');
       return;
     }
 
     setIsSwapping(true);
 
     try {
+      // Fetch fresh quote right before swap
+      toast.info('Fetching fresh quote...');
+      const amountLamports = Math.floor(parseFloat(inputAmount) * 1e9);
+      const freshQuote = await fetchJupiterQuote(
+        SOL_MINT,
+        TRAPANI_MINT,
+        amountLamports,
+        SLIPPAGE_BPS
+      );
+
       toast.info('Building swap transaction...');
-      const transaction = await buildJupiterSwap(quote, address);
+      const transaction = await buildJupiterSwap(freshQuote, address);
 
       toast.info('Please sign the transaction...');
       
@@ -92,8 +102,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       if (onSwapResult) {
         onSwapResult({
           signature: signatureString,
-          inAmount: parseInt(quote.inAmount) / 1e9,
-          outAmount: parseInt(quote.outAmount),
+          inAmount: parseInt(freshQuote.inAmount) / 1e9,
+          outAmount: parseInt(freshQuote.outAmount),
         });
       }
 
