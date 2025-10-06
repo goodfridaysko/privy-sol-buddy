@@ -7,10 +7,10 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { VersionedTransaction } from '@solana/web3.js';
-import { supabase } from '@/integrations/supabase/client';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
+import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -18,6 +18,7 @@ interface SwapPanelProps {
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { wallets } = useWallets();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
   const { address, ready: walletReady } = useEmbeddedSolWallet();
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
@@ -26,7 +27,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // Get embedded wallet signer
+  // Get embedded wallet
   const embeddedWallet = wallets.find(w => w.address === address);
 
   console.log('[SwapPanel] Wallet state:', {
@@ -113,31 +114,20 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         version: transaction.version,
       });
 
-      toast.info('Please approve transaction in wallet...');
+      toast.info('Please approve transaction...');
       
-      // Sign transaction with Privy embedded wallet
-      const { signedTransaction } = await embeddedWallet.signTransaction({
-        transaction: transaction.serialize()
+      // Sign and send transaction using Privy's signAndSendTransaction hook
+      // This uses the configured Solana RPC from PrivyProvider
+      const receipt = await signAndSendTransaction({
+        transaction: transaction.serialize(),
+        wallet: embeddedWallet
       });
       
-      console.log('[SwapPanel] Transaction signed, sending via backend...');
-      toast.info('Sending transaction...');
-      
-      // Send via backend edge function to avoid 403 RPC errors
-      const { data: result, error: sendError } = await supabase.functions.invoke(
-        'send-solana-transaction',
-        {
-          body: {
-            signedTransaction: Buffer.from(signedTransaction).toString('base64')
-          }
-        }
-      );
-
-      if (sendError) {
-        throw new Error(sendError.message || 'Failed to send transaction');
-      }
-
-      const signature = result.signature;
+      // Convert signature from Uint8Array to base58 string if needed
+      const signature = typeof receipt.signature === 'string' 
+        ? receipt.signature 
+        : bs58.encode(receipt.signature);
+      console.log('[SwapPanel] Transaction sent:', signature);
 
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction completed:', signature);
