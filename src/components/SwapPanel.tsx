@@ -7,7 +7,7 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useSignTransaction, useWallets } from '@privy-io/react-auth/solana';
+import { useSignTransaction } from '@privy-io/react-auth/solana';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
@@ -19,8 +19,7 @@ interface SwapPanelProps {
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { signTransaction } = useSignTransaction();
-  const { wallets } = useWallets();
-  const { address, ready: walletReady } = useEmbeddedSolWallet();
+  const { wallet: embeddedWallet, address, ready: walletReady } = useEmbeddedSolWallet();
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -28,15 +27,11 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // Get embedded Solana wallet for signing from Privy's useWallets hook
-  const embeddedWallet = wallets.find(w => w.address === address);
-
   console.log('[SwapPanel] Wallet state:', {
     walletReady,
     hasAddress: !!address,
     address,
     hasEmbeddedWallet: !!embeddedWallet,
-    walletsCount: wallets.length
   });
 
   const handleSwap = async () => {
