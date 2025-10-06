@@ -4,6 +4,7 @@ import { useWallets } from '@privy-io/react-auth/solana';
 import { TRAPANI_MINT, SOL_MINT } from '@/config/swap';
 import { toast } from 'sonner';
 import { PublicKey } from '@solana/web3.js';
+import { Loader2 } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -19,17 +20,21 @@ export function JupiterSwapButton() {
   const { wallets } = useWallets();
   const solanaWallet = wallets[0];
   const scriptLoaded = useRef(false);
+  const jupiterInitialized = useRef(false);
 
   useEffect(() => {
     if (scriptLoaded.current) return;
 
-    // Load Jupiter Terminal script
     const script = document.createElement('script');
     script.src = 'https://terminal.jup.ag/main-v2.js';
     script.async = true;
     script.onload = () => {
-      console.log('[Jupiter Terminal] Script loaded');
+      console.log('[Jupiter Terminal] Script loaded successfully');
       scriptLoaded.current = true;
+    };
+    script.onerror = () => {
+      console.error('[Jupiter Terminal] Failed to load script');
+      toast.error('Failed to load swap interface');
     };
     document.head.appendChild(script);
 
@@ -42,80 +47,102 @@ export function JupiterSwapButton() {
 
   const handleSwap = async () => {
     if (!window.Jupiter || !solanaWallet) {
-      toast.error('Please wait, loading swap interface...');
+      toast.error('Swap interface not ready');
       return;
     }
 
-    console.log('[Jupiter Terminal] Opening swap widget');
-    console.log('[Jupiter Terminal] Using Privy wallet:', solanaWallet.address);
+    if (jupiterInitialized.current) {
+      window.Jupiter.resume();
+      return;
+    }
+
+    console.log('[Jupiter Terminal] Initializing...');
 
     try {
-      // Create a wallet adapter compatible object from Privy wallet
+      // Create Privy-compatible wallet adapter
       const walletAdapter = {
         publicKey: new PublicKey(solanaWallet.address),
         signTransaction: async (transaction: any) => {
-          const result = await solanaWallet.signTransaction({ transaction });
-          return result.signedTransaction;
+          console.log('[Jupiter Terminal] Signing transaction...');
+          try {
+            const result = await solanaWallet.signTransaction(transaction);
+            console.log('[Jupiter Terminal] Transaction signed');
+            return result;
+          } catch (error) {
+            console.error('[Jupiter Terminal] Signing failed:', error);
+            throw error;
+          }
         },
         signAllTransactions: async (transactions: any[]) => {
-          const results = await Promise.all(
-            transactions.map(tx => solanaWallet.signTransaction({ transaction: tx }))
-          );
-          return results.map(r => r.signedTransaction);
-        },
-        signMessage: async (message: Uint8Array) => {
-          const result = await solanaWallet.signMessage({ message });
-          return result.signature;
+          console.log('[Jupiter Terminal] Signing multiple transactions...');
+          try {
+            const results = await Promise.all(
+              transactions.map(tx => solanaWallet.signTransaction(tx))
+            );
+            console.log('[Jupiter Terminal] All transactions signed');
+            return results;
+          } catch (error) {
+            console.error('[Jupiter Terminal] Multi-sign failed:', error);
+            throw error;
+          }
         },
       };
 
-      // Initialize Jupiter Terminal with the wallet adapter
       window.Jupiter.init({
-        displayMode: 'modal',
-        integratedTargetId: 'integrated-terminal',
+        displayMode: 'integrated',
+        integratedTargetId: 'jupiter-terminal',
         endpoint: 'https://api.mainnet-beta.solana.com',
         
-        // Pre-configure the swap
         formProps: {
           initialInputMint: SOL_MINT,
           initialOutputMint: TRAPANI_MINT,
-          initialAmount: '10000000', // 0.01 SOL
+          initialAmount: '10000000', // 0.01 SOL in lamports
         },
         
-        // Pass the wallet adapter
-        wallet: walletAdapter,
+        passThroughWallet: walletAdapter,
         
-        // Callbacks
         onSuccess: ({ txid }: { txid: string }) => {
           console.log('[Jupiter Terminal] Swap successful:', txid);
-          toast.success('Swap successful!', {
-            description: `Transaction: ${txid.slice(0, 8)}...`
+          toast.success('Swap completed!', {
+            description: `Transaction: ${txid.slice(0, 8)}...`,
           });
         },
+        
         onSwapError: ({ error }: { error: any }) => {
           console.error('[Jupiter Terminal] Swap error:', error);
           toast.error('Swap failed', {
-            description: error?.message || 'Please try again'
+            description: error?.message || 'Please try again',
           });
         },
       });
+
+      jupiterInitialized.current = true;
+      console.log('[Jupiter Terminal] Initialized successfully');
+      
     } catch (error) {
       console.error('[Jupiter Terminal] Init error:', error);
-      toast.error('Failed to open swap interface');
+      toast.error('Failed to initialize swap');
     }
   };
 
   return (
-    <div className="mx-6 mb-4">
+    <div className="space-y-3">
       <Button 
         onClick={handleSwap}
         disabled={!solanaWallet || !scriptLoaded.current}
         className="w-full"
         size="lg"
       >
-        {!scriptLoaded.current ? 'Loading...' : 'Swap SOL → TRAPANI'}
+        {!scriptLoaded.current ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Loading...
+          </>
+        ) : (
+          'Open Jupiter Swap'
+        )}
       </Button>
-      <div id="integrated-terminal"></div>
+      <div id="jupiter-terminal" className="w-full min-h-[400px]" />
     </div>
   );
 }
