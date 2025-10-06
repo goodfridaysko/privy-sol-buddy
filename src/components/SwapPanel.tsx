@@ -15,6 +15,14 @@ interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
+// Helper to convert base64 to Uint8Array without Buffer
+const b64ToBytes = (b64: string): Uint8Array =>
+  Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+// Helper to convert Uint8Array to base64 without Buffer
+const bytesToB64 = (bytes: Uint8Array): string =>
+  btoa(String.fromCharCode(...bytes));
+
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { wallets } = useWallets();
   const { signTransaction } = useSignTransaction();
@@ -34,7 +42,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     hasAddress: !!address,
     address,
     hasEmbeddedWallet: !!embeddedWallet,
-    walletsCount: wallets.length
+    walletsCount: wallets.length,
+    hasSignTransaction: !!signTransaction
   });
 
   const handleSwap = async () => {
@@ -103,17 +112,20 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       toast.info('Please approve transaction...');
 
       // Sign transaction using Privy's useSignTransaction hook
-      // Transaction needs to be serialized as Uint8Array for Privy
+      // Pass the serialized transaction as Uint8Array (no Buffer needed)
+      const txBytes = transaction.serialize();
+      console.log('[SwapPanel] Transaction serialized, size:', txBytes.length, 'bytes');
+      
       const { signedTransaction } = await signTransaction({
-        transaction: transaction.serialize(),
+        transaction: txBytes,
         wallet: embeddedWallet
       });
       
       console.log('[SwapPanel] Transaction signed successfully');
       toast.info('Sending transaction...');
       
-      // Convert signed transaction bytes to base64
-      const base64Tx = btoa(String.fromCharCode(...signedTransaction));
+      // Convert signed transaction bytes to base64 using web APIs (no Buffer)
+      const base64Tx = bytesToB64(signedTransaction);
       
       console.log('[SwapPanel] Sending to edge function...');
       
