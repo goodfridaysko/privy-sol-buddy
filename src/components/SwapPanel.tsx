@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -112,23 +113,27 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         console.log('[SwapPanel] Signed transaction type:', typeof signResult.signedTransaction);
         console.log('[SwapPanel] Signed transaction length:', signResult.signedTransaction.length);
         
-        // Send the signed transaction
-        const signature = await connection.sendRawTransaction(
-          signResult.signedTransaction,
+        toast.info('Sending transaction...');
+        
+        // Send via backend edge function to avoid RPC rate limits
+        const { data: sendResult, error: sendError } = await supabase.functions.invoke(
+          'send-solana-transaction',
           {
-            skipPreflight: false,
-            maxRetries: 3,
+            body: {
+              signedTransaction: Buffer.from(signResult.signedTransaction).toString('base64')
+            }
           }
         );
 
+        if (sendError) {
+          console.error('[SwapPanel] Send error:', sendError);
+          throw new Error(sendError.message || 'Failed to send transaction');
+        }
+
+        const signature = sendResult.signature;
         console.log('[SwapPanel] Transaction sent:', signature);
-        toast.info('Confirming transaction...');
-
-        // Wait for confirmation
-        await connection.confirmTransaction(signature, 'confirmed');
-
         toast.success('Swap successful!');
-        console.log('[SwapPanel] Transaction confirmed:', signature);
+        console.log('[SwapPanel] Transaction completed:', signature);
 
         if (onSwapResult) {
           onSwapResult({
