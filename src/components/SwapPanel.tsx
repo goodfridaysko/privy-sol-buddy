@@ -7,26 +7,15 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useWallets } from '@privy-io/react-auth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
-import { VersionedTransaction, Connection } from '@solana/web3.js';
-import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { wallets } = useWallets();
   const { address, ready: walletReady } = useEmbeddedSolWallet();
-  
-  // Find the Solana embedded wallet from Privy's wallets (has signTransaction method)
-  const privyWallet: any = wallets.find(w => 
-    (w as any).walletClientType === 'privy' && 
-    (w as any).chainType === 'solana' &&
-    w.address === address
-  );
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -38,20 +27,12 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     walletReady,
     hasAddress: !!address,
     address,
-    hasPrivyWallet: !!privyWallet,
-    walletType: privyWallet?.walletClientType,
   });
 
   const handleSwap = async () => {
     if (!walletReady || !address) {
       toast.error('Wallet not ready');
       console.error('[SwapPanel] Wallet not ready:', { walletReady, address });
-      return;
-    }
-
-    if (!privyWallet) {
-      toast.error('Embedded wallet not found');
-      console.error('[SwapPanel] No Privy wallet with signTransaction method');
       return;
     }
 
@@ -75,8 +56,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     setIsSwapping(true);
 
     try {
-      console.log('[SwapPanel] Starting PumpPortal swap...');
-      console.log('[SwapPanel] Request params:', {
+      console.log('[SwapPanel] Sending swap request to backend...');
+      console.log('[SwapPanel] Params:', {
         publicKey: address,
         action: 'buy',
         mint: TRAPANI_MINT,
@@ -87,60 +68,31 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         pool: 'auto'
       });
       
-      toast.info('Building swap transaction...');
+      toast.info('Processing swap via PumpPortal...');
 
-      // Get serialized transaction from PumpPortal - EXACTLY as in docs
-      const response = await fetch('https://pumpportal.fun/api/trade-local', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          publicKey: address,
-          action: 'buy',
-          mint: TRAPANI_MINT,
-          amount: amountSOL,
-          denominatedInSol: 'true',
-          slippage: SLIPPAGE_PERCENT,
-          priorityFee: PRIORITY_FEE,
-          pool: 'auto'
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`PumpPortal API failed: ${response.status}`);
-      }
-
-      const txData = await response.arrayBuffer();
-      const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
-      
-      console.log('[SwapPanel] Transaction received from PumpPortal');
-
-      toast.info('Please approve transaction in wallet...');
-      
-      // Use Privy wallet's signTransaction method (requires Connection for embedded wallet UI)
-      const connection = new Connection('https://solana-mainnet.g.alchemy.com/v2/demo');
-      const signedTx = await privyWallet.signTransaction(transaction, connection);
-      
-      console.log('[SwapPanel] Transaction signed, sending...');
-      toast.info('Sending transaction...');
-      
-      // Send signed transaction to backend
-      const { data: result, error: sendError } = await supabase.functions.invoke(
-        'send-solana-transaction',
+      // Send swap request to backend - backend will handle PumpPortal API and sending
+      const { data: result, error: swapError } = await supabase.functions.invoke(
+        'sign-and-send-pumpportal-swap',
         {
           body: {
-            signedTransaction: bs58.encode(signedTx.serialize())
+            publicKey: address,
+            action: 'buy',
+            mint: TRAPANI_MINT,
+            amount: amountSOL,
+            denominatedInSol: 'true',
+            slippage: SLIPPAGE_PERCENT,
+            priorityFee: PRIORITY_FEE,
+            pool: 'auto'
           }
         }
       );
 
-      if (sendError) {
-        throw new Error(sendError.message || 'Failed to send transaction');
+      if (swapError) {
+        throw new Error(swapError.message || 'Swap failed');
       }
 
       const signature = result.signature;
-      console.log('[SwapPanel] Transaction completed:', signature);
+      console.log('[SwapPanel] Swap completed:', signature);
 
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction completed:', signature);
@@ -252,7 +204,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !walletReady || !privyWallet || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !walletReady || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
