@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { WalletHeader } from '@/components/wallet/WalletHeader';
 import { WalletFooter } from '@/components/wallet/WalletFooter';
 import { SendSolForm } from '@/components/SendSolForm';
-import { SwapPanel } from '@/components/SwapPanel';
+import { JupiterSwapButton } from '@/components/JupiterSwapButton';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
 import { MoonPayModal } from '@/components/MoonPayModal';
 import { TrapaniChart } from '@/components/TrapaniChart';
@@ -225,22 +225,21 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Modals */}
+        {/* Swap Modal - Using Jupiter Terminal Widget */}
         <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
           <DialogContent className="sm:max-w-md bg-gradient-card border-border">
             <DialogHeader>
               <DialogTitle>Swap SOL → $TRAPANI</DialogTitle>
             </DialogHeader>
-            <SwapPanel
-              onSwapResult={({ signature }) => {
-                console.log('🔄 Swap completed, refreshing balance...', signature);
-                refetchBalance();
-                setSwapOpen(false);
-                toast.success('Swapped! You now hold $TRAPANI', {
-                  description: 'Check your balance above'
-                });
-              }}
-            />
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Using Jupiter DEX aggregator for best prices
+              </p>
+              <JupiterSwapButton />
+              <p className="text-xs text-muted-foreground text-center">
+                Jupiter automatically finds the best swap route
+              </p>
+            </div>
           </DialogContent>
         </Dialog>
 
