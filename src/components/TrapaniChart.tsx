@@ -12,26 +12,28 @@ export function TrapaniChart() {
   const [chartData, setChartData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Simulate price history (in production, fetch from API)
+  // Generate and update price history
   useEffect(() => {
-    setIsLoading(true);
-    
-    // Generate mock data based on current price
     const generateMockData = () => {
-      const points = timeRange === '1H' ? 12 : timeRange === '24H' ? 24 : 28;
-      const variance = 0.05; // 5% variance
+      const points = timeRange === '1H' ? 60 : timeRange === '24H' ? 96 : 168;
+      const variance = 0.03; // 3% variance for smoother movement
       const data: number[] = [];
       
+      // Create smooth price curve
       for (let i = 0; i < points; i++) {
-        const randomChange = (Math.random() - 0.5) * 2 * variance;
-        const price = currentPrice * (1 + randomChange);
+        const progress = i / points;
+        const wave = Math.sin(progress * Math.PI * 4) * variance;
+        const trend = (Math.random() - 0.5) * variance * 0.5;
+        const price = currentPrice * (1 + wave + trend);
         data.push(price);
       }
       
       return data;
     };
 
-    setTimeout(() => {
+    const updateChart = () => {
+      setIsLoading(true);
+      
       const data = generateMockData();
       setChartData(data);
       
@@ -42,7 +44,15 @@ export function TrapaniChart() {
       }
       
       setIsLoading(false);
-    }, 300);
+    };
+
+    // Initial update
+    updateChart();
+
+    // Update every 2 seconds for smooth animation
+    const interval = setInterval(updateChart, 2000);
+
+    return () => clearInterval(interval);
   }, [timeRange, currentPrice]);
 
   const renderChart = () => {
@@ -53,40 +63,49 @@ export function TrapaniChart() {
     const range = max - min;
 
     return (
-      <svg viewBox="0 0 100 30" className="w-full h-24" preserveAspectRatio="none">
+      <svg viewBox="0 0 100 40" className="w-full h-32" preserveAspectRatio="none">
         <defs>
           <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.3" />
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.2" />
             <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
           </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="0.5" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
         </defs>
         
         {/* Area under the line */}
         <path
-          d={`M 0,30 ${chartData
+          d={`M 0,40 ${chartData
             .map((price, i) => {
               const x = (i / (chartData.length - 1)) * 100;
-              const y = 25 - ((price - min) / range) * 20;
+              const y = 35 - ((price - min) / range) * 30;
               return `L ${x},${y}`;
             })
-            .join(' ')} L 100,30 Z`}
+            .join(' ')} L 100,40 Z`}
           fill="url(#chartGradient)"
         />
         
-        {/* Line */}
+        {/* Line with glow effect */}
         <path
           d={`M ${chartData
             .map((price, i) => {
               const x = (i / (chartData.length - 1)) * 100;
-              const y = 25 - ((price - min) / range) * 20;
+              const y = 35 - ((price - min) / range) * 30;
               return `${x},${y}`;
             })
             .join(' L ')}`}
           fill="none"
           stroke="hsl(var(--primary))"
-          strokeWidth="2"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
+          filter="url(#glow)"
+          className="transition-all duration-300 ease-in-out"
         />
       </svg>
     );
@@ -143,7 +162,7 @@ export function TrapaniChart() {
 
         {/* Chart label */}
         <p className="text-xs text-muted-foreground text-center">
-          Live price • Updates every 5 seconds
+          Live price • Updates every 2 seconds
         </p>
       </div>
     </Card>
