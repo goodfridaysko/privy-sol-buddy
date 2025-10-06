@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { VersionedTransaction, Connection } from '@solana/web3.js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -117,13 +118,24 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         transaction: transaction.serialize()
       });
       
-      console.log('[SwapPanel] Transaction signed, sending to network...');
+      console.log('[SwapPanel] Transaction signed, sending via backend...');
+      toast.info('Sending transaction...');
       
-      // Send signed transaction
-      const signature = await connection.sendRawTransaction(signedTransaction, {
-        skipPreflight: false,
-        maxRetries: 3
-      });
+      // Send via backend edge function to avoid 403 RPC errors
+      const { data: result, error: sendError } = await supabase.functions.invoke(
+        'send-solana-transaction',
+        {
+          body: {
+            signedTransaction: Buffer.from(signedTransaction).toString('base64')
+          }
+        }
+      );
+
+      if (sendError) {
+        throw new Error(sendError.message || 'Failed to send transaction');
+      }
+
+      const signature = result.signature;
 
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction completed:', signature);
