@@ -7,9 +7,10 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
+import { useWallets } from '@privy-io/react-auth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
-import { VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction, Connection } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 interface SwapPanelProps {
@@ -17,7 +18,15 @@ interface SwapPanelProps {
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { wallet: embeddedWallet, address, ready: walletReady } = useEmbeddedSolWallet();
+  const { wallets } = useWallets();
+  const { address, ready: walletReady } = useEmbeddedSolWallet();
+  
+  // Find the Solana embedded wallet from Privy's wallets (has signTransaction method)
+  const privyWallet: any = wallets.find(w => 
+    (w as any).walletClientType === 'privy' && 
+    (w as any).chainType === 'solana' &&
+    w.address === address
+  );
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -29,7 +38,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     walletReady,
     hasAddress: !!address,
     address,
-    hasEmbeddedWallet: !!embeddedWallet,
+    hasPrivyWallet: !!privyWallet,
+    walletType: privyWallet?.walletClientType,
   });
 
   const handleSwap = async () => {
@@ -39,9 +49,9 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       return;
     }
 
-    if (!embeddedWallet) {
+    if (!privyWallet) {
       toast.error('Embedded wallet not found');
-      console.error('[SwapPanel] No embedded wallet for signing');
+      console.error('[SwapPanel] No Privy wallet with signTransaction method');
       return;
     }
 
@@ -108,9 +118,9 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       toast.info('Please approve transaction in wallet...');
       
-      // Sign using embedded wallet's signTransaction method directly
-      // @ts-ignore - wallet object has signTransaction
-      const signedTxBytes = await embeddedWallet.signTransaction(transaction.serialize());
+      // Use Privy wallet's signTransaction method (requires Connection for embedded wallet UI)
+      const connection = new Connection('https://solana-mainnet.g.alchemy.com/v2/demo');
+      const signedTx = await privyWallet.signTransaction(transaction, connection);
       
       console.log('[SwapPanel] Transaction signed, sending...');
       toast.info('Sending transaction...');
@@ -120,7 +130,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         'send-solana-transaction',
         {
           body: {
-            signedTransaction: bs58.encode(signedTxBytes)
+            signedTransaction: bs58.encode(signedTx.serialize())
           }
         }
       );
@@ -242,7 +252,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !walletReady || !embeddedWallet || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !walletReady || !privyWallet || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
