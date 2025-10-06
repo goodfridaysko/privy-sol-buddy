@@ -44,8 +44,8 @@ export function PrivyClient({ children }: PrivyClientProps) {
         solana: {
           rpcs: {
             'solana:mainnet': {
-              rpc: createSolanaRpc('https://api.mainnet-beta.solana.com'),
-              rpcSubscriptions: createSolanaRpcSubscriptions('wss://api.mainnet-beta.solana.com')
+              rpc: createSolanaRpc('https://solana-mainnet.g.alchemy.com/v2/demo'),
+              rpcSubscriptions: createSolanaRpcSubscriptions('wss://solana-mainnet.g.alchemy.com/v2/demo')
             },
           },
         },
