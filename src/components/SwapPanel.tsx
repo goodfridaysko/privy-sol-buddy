@@ -112,10 +112,26 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       toast.info('Please sign transaction...');
       
-      // Sign the transaction using Privy's useSignTransaction hook with serialized transaction
-      const { signedTransaction } = await signTransaction({
+      // Create a wallet wrapper that Privy's signTransaction hook expects
+      const walletForSigning = {
+        address: embeddedWallet.address,
+        chainType: 'solana' as const,
+        walletClientType: 'privy' as const,
+        connectorType: 'embedded' as const,
+        signTransaction: async (tx: Uint8Array) => {
+          // Use Privy's internal signing via the hook
+          const result = await signTransaction({
+            transaction: tx,
+            wallet: embeddedWallet as any
+          });
+          return result.signedTransaction;
+        }
+      };
+      
+      // Sign the transaction
+      const signedTxBytes = await signTransaction({
         transaction: transaction.serialize(),
-        wallet: embeddedWallet
+        wallet: embeddedWallet as any
       });
       
       console.log('[SwapPanel] Transaction signed, sending via backend...');
@@ -126,7 +142,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         'send-solana-transaction',
         {
           body: {
-            signedTransaction: bs58.encode(signedTransaction)
+            signedTransaction: bs58.encode(signedTxBytes.signedTransaction)
           }
         }
       );
