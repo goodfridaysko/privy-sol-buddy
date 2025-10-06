@@ -10,8 +10,9 @@ import { buyTokenWithSOL } from '@/lib/pumpPortal';
 import { toast } from 'sonner';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction, PublicKey } from '@solana/web3.js';
 import { supabase } from '@/integrations/supabase/client';
+import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -24,9 +25,6 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   // Get first Solana wallet (embedded wallet)
   const solanaWallet = wallets[0];
   const address = solanaWallet?.address;
-  
-  // Create Solana connection
-  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -96,64 +94,62 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       console.log('[SwapPanel] Transaction bytes received:', {
         length: txBytes.length,
         first20Bytes: Array.from(txBytes.slice(0, 20)),
-        type: typeof txBytes,
-        isUint8Array: txBytes instanceof Uint8Array
       });
 
+      // Deserialize the transaction
+      const tx = VersionedTransaction.deserialize(txBytes);
+      console.log('[SwapPanel] Transaction deserialized, version:', tx.version);
+
       toast.info('Please approve in Privy wallet...');
-      console.log('[SwapPanel] Calling Privy signTransaction with raw bytes...');
+      
+      // Create wallet adapter compatible object
+      const walletAdapter = {
+        publicKey: new PublicKey(address),
+        signTransaction: async (transaction: VersionedTransaction) => {
+          const serialized = transaction.serialize();
+          const result = await solanaWallet.signTransaction({ transaction: serialized });
+          return VersionedTransaction.deserialize(result.signedTransaction);
+        }
+      };
 
-      // Try signing with raw bytes directly
-      try {
-        const signResult = await solanaWallet.signTransaction({
-          transaction: txBytes
-        });
+      // Sign transaction using the adapter
+      console.log('[SwapPanel] Signing transaction...');
+      const signedTx = await walletAdapter.signTransaction(tx);
+      console.log('[SwapPanel] Transaction signed');
 
-        console.log('[SwapPanel] Sign result:', signResult);
-        console.log('[SwapPanel] Signed transaction type:', typeof signResult.signedTransaction);
-        console.log('[SwapPanel] Signed transaction length:', signResult.signedTransaction.length);
-        
-        toast.info('Sending transaction...');
-        
-        // Send via backend edge function to avoid RPC rate limits
-        const { data: sendResult, error: sendError } = await supabase.functions.invoke(
-          'send-solana-transaction',
-          {
-            body: {
-              signedTransaction: Buffer.from(signResult.signedTransaction).toString('base64')
-            }
+      // Serialize and send via edge function
+      const signedTxBase64 = Buffer.from(signedTx.serialize()).toString('base64');
+      
+      toast.info('Sending transaction...');
+      console.log('[SwapPanel] Sending via edge function...');
+
+      const { data: sendResult, error: sendError } = await supabase.functions.invoke(
+        'send-solana-transaction',
+        {
+          body: {
+            signedTransaction: signedTxBase64
           }
-        );
-
-        if (sendError) {
-          console.error('[SwapPanel] Send error:', sendError);
-          throw new Error(sendError.message || 'Failed to send transaction');
         }
+      );
 
-        const signature = sendResult.signature;
-        console.log('[SwapPanel] Transaction sent:', signature);
-        toast.success('Swap successful!');
-        console.log('[SwapPanel] Transaction completed:', signature);
-
-        if (onSwapResult) {
-          onSwapResult({
-            signature,
-            inAmount: amountSOL,
-          });
-        }
-
-        setInputAmount('');
-        refetchBalance();
-      } catch (signError: any) {
-        console.error('[SwapPanel] Privy sign error:', signError);
-        console.error('[SwapPanel] Error details:', {
-          message: signError.message,
-          stack: signError.stack,
-          name: signError.name,
-          code: signError.code
-        });
-        throw signError;
+      if (sendError) {
+        console.error('[SwapPanel] Send error:', sendError);
+        throw new Error(sendError.message || 'Failed to send transaction');
       }
+
+      const signature = sendResult.signature;
+      toast.success('Swap successful!');
+      console.log('[SwapPanel] Transaction completed:', signature);
+
+      if (onSwapResult) {
+        onSwapResult({
+          signature,
+          inAmount: amountSOL,
+        });
+      }
+
+      setInputAmount('');
+      refetchBalance();
     } catch (error: any) {
       console.error('[SwapPanel] Swap error:', error);
       console.error('[SwapPanel] Error details:', {
