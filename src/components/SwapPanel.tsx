@@ -27,9 +27,9 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // Get embedded Solana wallet for signing
+  // Get embedded Solana wallet for signing - it's in linkedAccounts as solana_wallet type
   const embeddedWallet = user?.linkedAccounts?.find(
-    (account: any) => account.type === 'wallet' && account.walletClient === 'privy' && account.address === address
+    (account: any) => account.type === 'wallet' && account.walletClientType === 'privy' && account.chainType === 'solana'
   );
 
   console.log('[SwapPanel] Wallet state:', {
@@ -37,6 +37,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     hasAddress: !!address,
     address,
     hasEmbeddedWallet: !!embeddedWallet,
+    linkedAccounts: user?.linkedAccounts?.map((a: any) => ({ type: a.type, chainType: a.chainType, walletClientType: a.walletClientType }))
   });
 
   const handleSwap = async () => {
