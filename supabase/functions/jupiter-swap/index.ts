@@ -29,23 +29,18 @@ serve(async (req) => {
       throw new Error('Missing quoteResponse or userPublicKey');
     }
 
+    // Use Jupiter V6 API with LEGACY transaction flag
     const swapBody = {
       quoteResponse,
       userPublicKey,
       wrapAndUnwrapSol: true,
-      useSharedAccounts: true, // Enable automatic ATA creation
       dynamicComputeUnitLimit: true,
-      dynamicSlippage: true,
-      prioritizationFeeLamports: {
-        priorityLevelWithMaxLamports: {
-          maxLamports: 1000000,
-          priorityLevel: "veryHigh"
-        }
-      }
+      prioritizationFeeLamports: 'auto',
+      asLegacyTransaction: true, // CRITICAL: Force legacy transactions for Privy
     };
 
-    console.log('📤 Calling Jupiter swap API (lite-api v1)...');
-    const response = await fetch('https://lite-api.jup.ag/swap/v1/swap', {
+    console.log('📤 Calling Jupiter V6 swap API (LEGACY MODE)...');
+    const response = await fetch('https://quote-api.jup.ag/v6/swap', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -70,7 +65,16 @@ serve(async (req) => {
       throw new Error('Invalid swap transaction response from Jupiter');
     }
 
-    console.log('✅ Swap transaction built successfully');
+    // Verify it's a legacy transaction (not v0)
+    const txBuffer = Uint8Array.from(atob(data.swapTransaction), c => c.charCodeAt(0));
+    const firstByte = txBuffer[0];
+    
+    if (firstByte === 0x80 || firstByte === 128) {
+      console.error('❌ Jupiter returned v0 transaction despite asLegacyTransaction flag!');
+      throw new Error('Jupiter returned versioned transaction. Privy requires legacy transactions.');
+    }
+
+    console.log('✅ Legacy swap transaction built successfully');
 
     return new Response(
       JSON.stringify(data),

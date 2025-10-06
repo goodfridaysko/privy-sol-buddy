@@ -1,10 +1,11 @@
 /**
- * Jupiter V6 Swap Integration (Legacy Transaction Support)
- * Alternative to PumpPortal with better legacy transaction support
+ * Jupiter V6 Swap Integration via Backend Proxy
+ * Solves DNS/CORS issues by routing through edge functions
  */
 
 import { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { RPC_URL } from '@/config/swap';
+import { supabase } from '@/integrations/supabase/client';
 
 interface JupiterQuoteResponse {
   inputMint: string;
@@ -37,56 +38,43 @@ export async function swapWithJupiter(
   const connection = new Connection(RPC_URL, 'confirmed');
   
   try {
-    console.log("Starting Jupiter swap...");
+    console.log("[Jupiter] Starting swap via backend proxy...");
     
-    // 1. Get quote
-    const quoteUrl = new URL("https://quote-api.jup.ag/v6/quote");
-    quoteUrl.searchParams.append("inputMint", inputMint);
-    quoteUrl.searchParams.append("outputMint", outputMint);
-    quoteUrl.searchParams.append("amount", amountLamports.toString());
-    quoteUrl.searchParams.append("slippageBps", slippageBps.toString());
-    
-    console.log("Fetching quote from Jupiter...");
-    const quoteResponse = await fetch(quoteUrl.toString());
-    
-    if (!quoteResponse.ok) {
-      const error = await quoteResponse.text();
-      throw new Error(`Quote failed: ${error}`);
+    // 1. Get quote via edge function (avoids DNS/CORS issues)
+    console.log("[Jupiter] Fetching quote...");
+    const { data: quoteData, error: quoteError } = await supabase.functions.invoke('jupiter-quote', {
+      body: {
+        inputMint,
+        outputMint,
+        amount: amountLamports.toString(),
+        slippageBps,
+      },
+    });
+
+    if (quoteError) {
+      throw new Error(`Quote failed: ${quoteError.message}`);
     }
-    
-    const quoteData: JupiterQuoteResponse = await quoteResponse.json();
-    console.log("Quote received:", {
+
+    console.log("[Jupiter] Quote received:", {
       inAmount: quoteData.inAmount,
       outAmount: quoteData.outAmount,
-      priceImpactPct: quoteData.priceImpactPct
+      priceImpactPct: quoteData.priceImpactPct,
     });
-    
-    // 2. Get swap transaction with LEGACY flag
-    const swapRequest: JupiterSwapRequest = {
-      quoteResponse: quoteData,
-      userPublicKey: userAddress,
-      dynamicComputeUnitLimit: true,
-      prioritizationFeeLamports: "auto",
-      asLegacyTransaction: true // FORCE LEGACY
-    };
-    
-    console.log("Requesting swap transaction from Jupiter...");
-    const swapResponse = await fetch("https://quote-api.jup.ag/v6/swap", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
+
+    // 2. Get swap transaction via edge function
+    console.log("[Jupiter] Requesting swap transaction...");
+    const { data: swapData, error: swapError } = await supabase.functions.invoke('jupiter-swap', {
+      body: {
+        quoteResponse: quoteData,
+        userPublicKey: userAddress,
       },
-      body: JSON.stringify(swapRequest)
     });
-    
-    if (!swapResponse.ok) {
-      const error = await swapResponse.text();
-      throw new Error(`Swap request failed: ${error}`);
+
+    if (swapError) {
+      throw new Error(`Swap request failed: ${swapError.message}`);
     }
-    
-    const swapData = await swapResponse.json();
-    console.log("Swap response received");
+
+    console.log("[Jupiter] Swap transaction received");
     
     // 3. Deserialize transaction
     const swapTransactionBuf = Buffer.from(swapData.swapTransaction, "base64");
