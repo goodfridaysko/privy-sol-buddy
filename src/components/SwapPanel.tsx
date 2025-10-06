@@ -79,7 +79,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       
       toast.info('Building swap transaction...');
 
-      // Get unsigned transaction from PumpPortal
+      // Get unsigned transaction from PumpPortal (force legacy for Privy compatibility)
       const response = await fetch('https://pumpportal.fun/api/trade-local', {
         method: 'POST',
         headers: {
@@ -93,7 +93,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
           denominatedInSol: 'true',
           slippage: SLIPPAGE_PERCENT,
           priorityFee: PRIORITY_FEE,
-          pool: 'auto'
+          pool: 'auto',
+          asLegacyTransaction: true // Force legacy transaction for Privy compatibility
         }),
       });
 
