@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowDown, Loader2 } from 'lucide-react';
-import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/config/swap';
+import { TRAPANI_MINT, SOL_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/config/swap';
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
@@ -10,7 +10,8 @@ import { useWallets } from '@privy-io/react-auth/solana';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
 import { VersionedTransaction, PublicKey } from '@solana/web3.js';
-import { signWithPrivy } from '@/lib/privySign';
+import { handlePumpPortalSwap } from '@/lib/pumpPortalDebug';
+import { swapWithJupiter } from '@/lib/jupiterSwap';
 import { bytesToB64 } from '@/polyfills';
 
 interface SwapPanelProps {
@@ -103,39 +104,55 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       }
 
       const txData = await response.arrayBuffer();
-      const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
+      const base64Tx = btoa(String.fromCharCode(...new Uint8Array(txData)));
       
-      console.log('[SwapPanel] Transaction received, validating and signing with Privy...');
+      console.log('[SwapPanel] Transaction received, debugging and signing...');
       toast.info('Please approve transaction...');
 
-      // Sign transaction using Privy's embedded wallet with validation
-      // This will check fee payer matches user address
-      const userPubkey = new PublicKey(address);
-      const signedBytes = await signWithPrivy(transaction, embeddedWallet, userPubkey);
-      
-      console.log('[SwapPanel] Transaction signed successfully');
-      toast.info('Sending transaction...');
-      
-      // Convert signed transaction bytes to base64 (no Buffer!)
-      const base64Tx = bytesToB64(signedBytes);
-      
-      console.log('[SwapPanel] Sending to edge function...');
-      
-      // Send signed transaction via edge function
-      const { data: result, error: sendError } = await supabase.functions.invoke(
-        'send-solana-transaction',
-        {
-          body: {
-            signedTransaction: base64Tx
+      let signature: string;
+
+      try {
+        // Try PumpPortal with enhanced debugging
+        const signedTx = await handlePumpPortalSwap(
+          base64Tx,
+          embeddedWallet,
+          address
+        );
+        
+        console.log('[SwapPanel] Signed via PumpPortal, broadcasting...');
+        toast.info('Sending transaction...');
+        
+        const serializedTx = bytesToB64(signedTx.serialize());
+        
+        const { data: result, error: sendError } = await supabase.functions.invoke(
+          'send-solana-transaction',
+          {
+            body: { signedTransaction: serializedTx }
           }
-        }
-      );
+        );
 
-      if (sendError) {
-        throw new Error(sendError.message || 'Failed to send transaction');
+        if (sendError) throw new Error(sendError.message || 'Failed to send');
+        
+        signature = result.signature;
+        
+      } catch (pumpError: any) {
+        console.error('[SwapPanel] PumpPortal failed, trying Jupiter fallback...');
+        console.error('[SwapPanel] PumpPortal error:', pumpError);
+        
+        toast.info('Trying alternative swap route...');
+        
+        const amountLamports = Math.floor(amountSOL * 1e9);
+        const jupiterResult = await swapWithJupiter(
+          embeddedWallet,
+          address,
+          SOL_MINT,
+          TRAPANI_MINT,
+          amountLamports,
+          SLIPPAGE_PERCENT * 100
+        );
+        
+        signature = jupiterResult.signature;
       }
-
-      const signature = result.signature;
       console.log('[SwapPanel] Swap completed:', signature);
 
       toast.success('Swap successful!');
