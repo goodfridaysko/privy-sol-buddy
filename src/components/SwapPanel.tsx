@@ -7,24 +7,18 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { usePrivy } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { VersionedTransaction, Connection } from '@solana/web3.js';
+import { VersionedTransaction } from '@solana/web3.js';
 import { supabase } from '@/integrations/supabase/client';
+import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { ready, authenticated } = usePrivy();
   const { wallets } = useWallets();
-  
-  // Get first Solana wallet (embedded wallet)
-  const solanaWallet = wallets[0];
-  const address = solanaWallet?.address;
-  
-  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
+  const { address, ready: walletReady } = useEmbeddedSolWallet();
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -32,24 +26,32 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
+  // Get embedded wallet signer
+  const embeddedWallet = wallets.find(w => w.address === address);
+
   console.log('[SwapPanel] Wallet state:', {
-    ready,
-    authenticated,
-    hasWallet: !!solanaWallet,
+    walletReady,
+    hasAddress: !!address,
     address,
+    hasEmbeddedWallet: !!embeddedWallet,
     walletsCount: wallets.length
   });
 
   const handleSwap = async () => {
-    if (!ready || !authenticated) {
-      toast.error('Please wait for wallet to be ready');
-      console.error('[SwapPanel] Wallet not ready:', { ready, authenticated });
+    if (!walletReady || !address) {
+      toast.error('Wallet not ready');
+      console.error('[SwapPanel] Wallet not ready:', { walletReady, address });
       return;
     }
 
-    if (!address || !solanaWallet || !inputAmount) {
-      toast.error('Missing wallet or amount');
-      console.error('[SwapPanel] Missing data:', { address, hasWallet: !!solanaWallet, inputAmount });
+    if (!embeddedWallet) {
+      toast.error('Embedded wallet not found');
+      console.error('[SwapPanel] No embedded wallet for signing');
+      return;
+    }
+
+    if (!inputAmount) {
+      toast.error('Please enter an amount');
       return;
     }
 
@@ -113,8 +115,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       toast.info('Please approve transaction in wallet...');
       
-      // Sign transaction with Privy wallet
-      const { signedTransaction } = await solanaWallet.signTransaction({
+      // Sign transaction with Privy embedded wallet
+      const { signedTransaction } = await embeddedWallet.signTransaction({
         transaction: transaction.serialize()
       });
       
@@ -247,7 +249,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !ready || !authenticated || !address || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !walletReady || !embeddedWallet || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
