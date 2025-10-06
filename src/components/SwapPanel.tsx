@@ -7,18 +7,18 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
+import { usePrivy } from '@privy-io/react-auth';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
+import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { wallets } = useWallets();
-  const { signTransaction } = useSignTransaction();
+  const { user } = usePrivy();
   const { address, ready: walletReady } = useEmbeddedSolWallet();
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
@@ -27,15 +27,16 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
-  // Get embedded wallet
-  const embeddedWallet = wallets.find(w => w.address === address);
+  // Get embedded Solana wallet for signing
+  const embeddedWallet = user?.linkedAccounts?.find(
+    (account: any) => account.type === 'wallet' && account.walletClient === 'privy' && account.address === address
+  );
 
   console.log('[SwapPanel] Wallet state:', {
     walletReady,
     hasAddress: !!address,
     address,
     hasEmbeddedWallet: !!embeddedWallet,
-    walletsCount: wallets.length
   });
 
   const handleSwap = async () => {
@@ -114,24 +115,21 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         version: transaction.version,
       });
 
-      toast.info('Please approve transaction...');
+      toast.info('Please sign transaction...');
       
-      // Sign transaction using Privy's useSignTransaction hook
-      // This properly handles VersionedTransaction from external APIs
-      const { signedTransaction } = await signTransaction({
-        transaction: transaction.serialize(),
-        wallet: embeddedWallet
-      });
+      // Sign the transaction using Privy's embedded wallet
+      // @ts-ignore - Privy wallet has signTransaction method
+      const signedTx = await embeddedWallet.signTransaction(transaction);
       
       console.log('[SwapPanel] Transaction signed, sending via backend...');
       toast.info('Sending transaction...');
       
-      // Send via backend edge function
+      // Send the fully signed transaction via backend
       const { data: result, error: sendError } = await supabase.functions.invoke(
         'send-solana-transaction',
         {
           body: {
-            signedTransaction: Buffer.from(signedTransaction).toString('base64')
+            signedTransaction: bs58.encode(signedTx.serialize())
           }
         }
       );
