@@ -7,10 +7,10 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { usePrivy } from '@privy-io/react-auth';
+import { useWallets } from '@privy-io/react-auth/solana';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
-import { VersionedTransaction, Keypair } from '@solana/web3.js';
+import { VersionedTransaction, Connection } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 interface SwapPanelProps {
@@ -18,8 +18,11 @@ interface SwapPanelProps {
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { user } = usePrivy();
-  const { address, ready: walletReady, wallet } = useEmbeddedSolWallet();
+  const { wallets } = useWallets();
+  const { address, ready: walletReady } = useEmbeddedSolWallet();
+  
+  // Get Solana wallet with signTransaction method
+  const solanaWallet = wallets.find(w => w.address === address);
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -31,12 +34,20 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     walletReady,
     hasAddress: !!address,
     address,
+    hasSolanaWallet: !!solanaWallet,
+    walletsCount: wallets.length
   });
 
   const handleSwap = async () => {
     if (!walletReady || !address) {
       toast.error('Wallet not ready');
       console.error('[SwapPanel] Wallet not ready:', { walletReady, address });
+      return;
+    }
+
+    if (!solanaWallet) {
+      toast.error('Solana wallet not found');
+      console.error('[SwapPanel] No Solana wallet with signTransaction');
       return;
     }
 
@@ -89,31 +100,23 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       const txData = await response.arrayBuffer();
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
       
-      console.log('[SwapPanel] Transaction received from PumpPortal');
-      toast.info('Signing transaction...');
+      console.log('[SwapPanel] Transaction received, signing...');
+      toast.info('Please approve transaction...');
 
-      // Get wallet adapter from linkedAccount
-      if (!wallet) {
-        throw new Error('Wallet not found');
-      }
-
-      // Use the wallet's sign method if available
-      let signedTxBytes: Uint8Array;
+      // Sign transaction using Privy Solana wallet's signTransaction
+      const signedResult = await solanaWallet.signTransaction({
+        transaction: transaction.serialize()
+      });
       
-      // Try to get private key from wallet for signing
-      // Privy embedded wallets need special handling
-      console.log('[SwapPanel] Wallet object:', wallet);
+      console.log('[SwapPanel] Transaction signed, sending...');
+      toast.info('Sending transaction...');
       
-      // For now, send unsigned transaction and let backend handle it
-      // This requires backend to have signing capability
-      console.log('[SwapPanel] Sending to backend for signing and submission...');
-      toast.info('Processing transaction...');
-      
+      // Send signed transaction to Solana
       const { data: result, error: sendError } = await supabase.functions.invoke(
         'send-solana-transaction',
         {
           body: {
-            signedTransaction: bs58.encode(transaction.serialize())
+            signedTransaction: bs58.encode(signedResult.signedTransaction)
           }
         }
       );
@@ -235,7 +238,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !walletReady || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !walletReady || !solanaWallet || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
