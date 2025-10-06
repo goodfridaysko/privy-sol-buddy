@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
-import { VersionedTransaction } from '@solana/web3.js';
+import { VersionedTransaction, PublicKey } from '@solana/web3.js';
 import { signWithPrivy } from '@/lib/privySign';
 import { bytesToB64 } from '@/polyfills';
 
@@ -104,12 +104,13 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       const txData = await response.arrayBuffer();
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
       
-      console.log('[SwapPanel] Transaction received, signing with Privy embedded wallet...');
+      console.log('[SwapPanel] Transaction received, validating and signing with Privy...');
       toast.info('Please approve transaction...');
 
-      // Sign transaction using Privy's embedded wallet
-      // This will open the Privy approval modal
-      const signedBytes = await signWithPrivy(transaction, embeddedWallet);
+      // Sign transaction using Privy's embedded wallet with validation
+      // This will check fee payer matches user address
+      const userPubkey = new PublicKey(address);
+      const signedBytes = await signWithPrivy(transaction, embeddedWallet, userPubkey);
       
       console.log('[SwapPanel] Transaction signed successfully');
       toast.info('Sending transaction...');
@@ -156,12 +157,26 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         name: error.name,
       });
 
+      // Show user-friendly error messages
+      let errorMessage = 'Swap failed';
+      
       if (error.message?.includes('User rejected')) {
-        toast.error('Transaction rejected');
+        errorMessage = 'Transaction rejected';
       } else if (error.message?.includes('insufficient funds')) {
-        toast.error('Insufficient SOL for swap + fees');
-      } else {
-        toast.error(error.message || 'Swap failed - check console for details');
+        errorMessage = 'Insufficient SOL for swap + fees';
+      } else if (error.message?.includes('Fee payer mismatch')) {
+        errorMessage = 'Transaction validation failed - please try again';
+      } else if (error.message?.includes('Privy signing failed')) {
+        errorMessage = error.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
+      
+      // Also alert for critical errors (helps with debugging)
+      if (error.message?.includes('Fee payer') || error.message?.includes('Privy')) {
+        alert(`Debug info: ${error.message}`);
       }
     } finally {
       setIsSwapping(false);

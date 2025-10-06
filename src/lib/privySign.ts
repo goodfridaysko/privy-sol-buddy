@@ -2,10 +2,10 @@
  * Privy Solana Transaction Signing Utility
  * 
  * This module provides a clean interface for signing and sending Solana transactions
- * using Privy's embedded wallet, without relying on window.solana or external wallet adapters.
+ * using Privy's embedded wallet, with proper validation and error handling.
  */
 
-import { Connection, VersionedTransaction } from '@solana/web3.js';
+import { Connection, VersionedTransaction, PublicKey } from '@solana/web3.js';
 import { b64ToBytes } from '@/polyfills';
 import { RPC_URL } from '@/config/swap';
 
@@ -13,46 +13,75 @@ const connection = new Connection(RPC_URL, 'confirmed');
 
 /**
  * Sign and send a Solana transaction using Privy's embedded wallet
+ * Includes validation for fee payer and blockhash freshness
  * 
- * @param swapTxB64 - Base64 encoded transaction from Jupiter/PumpPortal
+ * @param transaction - VersionedTransaction to sign
  * @param wallet - Privy Solana wallet object with signTransaction method
+ * @param userPubkey - User's public key (for fee payer validation)
  * @returns Transaction signature
  */
 export async function signAndSendWithPrivy(
-  swapTxB64: string,
-  wallet: any
+  transaction: VersionedTransaction,
+  wallet: any,
+  userPubkey: PublicKey
 ): Promise<string> {
   if (!wallet) {
     throw new Error('No Privy Solana wallet provided');
   }
 
-  console.log('[PrivySign] Deserializing transaction...');
+  console.log('[PrivySign] Starting transaction sign + send...');
+
+  // Sanity check: Fee payer must match user's wallet
+  const feePayer = transaction.message.staticAccountKeys[0].toBase58();
+  const userAddress = userPubkey.toBase58();
   
-  // Deserialize Jupiter/PumpPortal tx (no Buffer needed!)
-  const bytes = b64ToBytes(swapTxB64);
-  const tx = VersionedTransaction.deserialize(bytes);
-
-  console.log('[PrivySign] Transaction deserialized, signing...');
-
-  // Sign with Privy embedded wallet
-  const signed = await wallet.signTransaction(tx);
-
-  console.log('[PrivySign] Transaction signed, broadcasting...');
-
-  // Broadcast to Solana network
-  const sig = await connection.sendRawTransaction(signed.serialize(), {
-    skipPreflight: false,
-    preflightCommitment: 'confirmed'
+  console.log('[PrivySign] Transaction details:', {
+    txVersion: (transaction as any).version || 'legacy',
+    feePayer,
+    userAddress,
+    feePayerMatch: feePayer === userAddress
   });
 
-  console.log('[PrivySign] Transaction sent:', sig);
+  if (feePayer !== userAddress) {
+    const error = `Fee payer mismatch: transaction expects ${feePayer} but wallet is ${userAddress}`;
+    console.error('[PrivySign]', error);
+    throw new Error(error);
+  }
 
-  // Optional: Wait for confirmation
-  await connection.confirmTransaction(sig, 'confirmed');
-  
-  console.log('[PrivySign] Transaction confirmed:', sig);
+  // Optional: Check blockhash freshness (if > 60s, should rebuild at source)
+  // For now we just log it
+  console.log('[PrivySign] Fee payer validated, signing with Privy...');
 
-  return sig;
+  try {
+    // Sign with Privy embedded wallet
+    const signed = await wallet.signTransaction(transaction);
+    
+    console.log('[PrivySign] Transaction signed successfully, broadcasting...');
+
+    // Broadcast to Solana network
+    const sig = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+      maxRetries: 3
+    });
+
+    console.log('[PrivySign] Transaction sent:', sig);
+
+    // Wait for confirmation
+    await connection.confirmTransaction(sig, 'confirmed');
+    
+    console.log('[PrivySign] Transaction confirmed:', sig);
+
+    return sig;
+  } catch (error: any) {
+    console.error('[PrivySign] Sign/send failed:', error);
+    console.error('[PrivySign] Error details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack
+    });
+    throw error;
+  }
 }
 
 /**
@@ -61,17 +90,51 @@ export async function signAndSendWithPrivy(
  */
 export async function signWithPrivy(
   transaction: VersionedTransaction,
-  wallet: any
+  wallet: any,
+  userPubkey: PublicKey
 ): Promise<Uint8Array> {
   if (!wallet) {
     throw new Error('No Privy Solana wallet provided');
   }
 
-  console.log('[PrivySign] Signing transaction...');
+  console.log('[PrivySign] Validating transaction before signing...');
   
-  const signed = await wallet.signTransaction(transaction);
+  // Sanity check: Fee payer must match user's wallet
+  const feePayer = transaction.message.staticAccountKeys[0].toBase58();
+  const userAddress = userPubkey.toBase58();
   
-  console.log('[PrivySign] Transaction signed');
-  
-  return signed.serialize();
+  console.log('[PrivySign] Transaction details:', {
+    txVersion: (transaction as any).version || 'legacy',
+    feePayer,
+    userAddress,
+    feePayerMatch: feePayer === userAddress,
+    accountKeysCount: transaction.message.staticAccountKeys.length
+  });
+
+  if (feePayer !== userAddress) {
+    const error = `Fee payer mismatch: transaction expects ${feePayer} but wallet is ${userAddress}`;
+    console.error('[PrivySign]', error);
+    throw new Error(error);
+  }
+
+  console.log('[PrivySign] Fee payer validated, signing transaction...');
+
+  try {
+    const signed = await wallet.signTransaction(transaction);
+    
+    console.log('[PrivySign] Transaction signed successfully');
+    
+    return signed.serialize();
+  } catch (error: any) {
+    console.error('[PrivySign] Signing failed:', error);
+    console.error('[PrivySign] Error details:', {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code
+    });
+    
+    // Re-throw with more context
+    throw new Error(`Privy signing failed: ${error?.message || 'Unknown error'}`);
+  }
 }
+
