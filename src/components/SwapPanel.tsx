@@ -7,15 +7,19 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
+import { usePrivy } from '@privy-io/react-auth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
+import { VersionedTransaction, Keypair } from '@solana/web3.js';
+import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { address, ready: walletReady } = useEmbeddedSolWallet();
+  const { user } = usePrivy();
+  const { address, ready: walletReady, wallet } = useEmbeddedSolWallet();
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -56,39 +60,65 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     setIsSwapping(true);
 
     try {
-      console.log('[SwapPanel] Sending swap request to backend...');
-      console.log('[SwapPanel] Params:', {
-        publicKey: address,
-        action: 'buy',
-        mint: TRAPANI_MINT,
-        amount: amountSOL,
-        denominatedInSol: 'true',
-        slippage: SLIPPAGE_PERCENT,
-        priorityFee: PRIORITY_FEE,
-        pool: 'auto'
-      });
+      console.log('[SwapPanel] Starting PumpPortal swap...');
       
-      toast.info('Processing swap via PumpPortal...');
+      toast.info('Building swap transaction...');
 
-      // Send swap request to backend - backend will handle PumpPortal API and sending
-      const { data: result, error: swapError } = await supabase.functions.invoke(
-        'sign-and-send-pumpportal-swap',
+      // Get unsigned transaction from PumpPortal
+      const response = await fetch('https://pumpportal.fun/api/trade-local', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          publicKey: address,
+          action: 'buy',
+          mint: TRAPANI_MINT,
+          amount: amountSOL,
+          denominatedInSol: 'true',
+          slippage: SLIPPAGE_PERCENT,
+          priorityFee: PRIORITY_FEE,
+          pool: 'auto'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`PumpPortal API failed: ${response.status}`);
+      }
+
+      const txData = await response.arrayBuffer();
+      const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
+      
+      console.log('[SwapPanel] Transaction received from PumpPortal, getting private key...');
+      toast.info('Please approve to sign transaction...');
+
+      // Get the Solana provider from Privy user object
+      const solanaProvider = await (user as any).solana?.();
+      
+      if (!solanaProvider) {
+        throw new Error('Solana provider not available');
+      }
+      
+      console.log('[SwapPanel] Signing with Solana provider...');
+      
+      // Sign using provider's signTransaction
+      const signedTx = await solanaProvider.signTransaction(transaction);
+      
+      console.log('[SwapPanel] Transaction signed, sending...');
+      toast.info('Sending transaction...');
+      
+      // Send signed transaction
+      const { data: result, error: sendError } = await supabase.functions.invoke(
+        'send-solana-transaction',
         {
           body: {
-            publicKey: address,
-            action: 'buy',
-            mint: TRAPANI_MINT,
-            amount: amountSOL,
-            denominatedInSol: 'true',
-            slippage: SLIPPAGE_PERCENT,
-            priorityFee: PRIORITY_FEE,
-            pool: 'auto'
+            signedTransaction: bs58.encode(signedTx.serialize())
           }
         }
       );
 
-      if (swapError) {
-        throw new Error(swapError.message || 'Swap failed');
+      if (sendError) {
+        throw new Error(sendError.message || 'Failed to send transaction');
       }
 
       const signature = result.signature;
