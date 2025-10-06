@@ -8,21 +8,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WalletHeader } from '@/components/wallet/WalletHeader';
 import { WalletFooter } from '@/components/wallet/WalletFooter';
-import { ActionButtons } from '@/components/wallet/ActionButtons';
-import { TokenList } from '@/components/wallet/TokenList';
-import { ActivityTab } from '@/components/wallet/ActivityTab';
 import { SendSolForm } from '@/components/SendSolForm';
 import { SwapPanel } from '@/components/SwapPanel';
 import { ReceiveModal } from '@/components/wallet/ReceiveModal';
 import { MoonPayModal } from '@/components/MoonPayModal';
-import { Wallet, Loader2, Image, CreditCard } from 'lucide-react';
+import { TrapaniChart } from '@/components/TrapaniChart';
+import { TrapaniBalances } from '@/components/TrapaniBalances';
+import { PrimaryCTAStack } from '@/components/PrimaryCTAStack';
+import { StatusBar } from '@/components/StatusBar';
+import { ActivityTab } from '@/components/wallet/ActivityTab';
+import { Wallet, Loader2, Send, QrCode, Settings } from 'lucide-react';
 import { toast } from 'sonner';
+import trapaniCoin from '@/assets/trapani-coin.png';
+import { MIN_SOL_AMOUNT } from '@/config/swap';
 
 const Index = () => {
   const { login, logout, ready, authenticated, user } = useAuth();
   const { address, hasWallet, isLoading } = useEmbeddedSolWallet();
   const { fundWallet, showMoonPay, fundingAddress, closeFundingFlow } = useFund();
-  const { refetch: refetchBalance } = useBalance(address);
+  const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   
   console.log('🎯 Index state:', {
     ready,
@@ -35,6 +39,8 @@ const Index = () => {
   
   const [sendOpen, setSendOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [walletCreated, setWalletCreated] = useState(false);
 
   // Detect when wallet is first created and show success message
@@ -86,31 +92,41 @@ const Index = () => {
         <div className="w-full max-w-md space-y-8 text-center">
           <div className="space-y-4">
             <div className="flex justify-center">
-              <div className="rounded-full bg-gradient-primary p-4 shadow-glow">
-                <Wallet className="h-12 w-12 text-primary-foreground" />
+              <div className="rounded-full bg-gradient-primary p-6 shadow-glow">
+                <img src={trapaniCoin} alt="TRAPANI" className="h-16 w-16" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Solana Wallet
+            <h1 className="text-5xl font-bold">
+              Buy and hold <span className="bg-gradient-primary bg-clip-text text-transparent">$TRAPANI</span>
             </h1>
-            <p className="text-muted-foreground">
-              Secure, self-custodial wallet powered by Privy
+            <p className="text-lg text-muted-foreground">
+              Non-custodial wallet • You control your keys
             </p>
           </div>
 
           <Button
             onClick={login}
             size="lg"
-            className="w-full bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow"
+            className="w-full h-14 text-base bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow font-semibold"
           >
-            Login / Sign Up
+            Get Started
           </Button>
 
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p>✓ Email, SMS, or passkey login</p>
-            <p>✓ No seed phrases to manage</p>
-            <p>✓ Auto-generated embedded wallet</p>
+          <div className="space-y-3 text-sm text-muted-foreground pt-4">
+            <p className="flex items-center justify-center gap-2">
+              <span className="text-primary">✓</span> Email or SMS login - no passwords
+            </p>
+            <p className="flex items-center justify-center gap-2">
+              <span className="text-primary">✓</span> Buy SOL with card via MoonPay
+            </p>
+            <p className="flex items-center justify-center gap-2">
+              <span className="text-primary">✓</span> Swap SOL → $TRAPANI instantly
+            </p>
           </div>
+
+          <p className="text-xs text-muted-foreground pt-4">
+            Powered by Privy • Not investment advice
+          </p>
         </div>
       </div>
     );
@@ -145,10 +161,10 @@ const Index = () => {
     );
   }
 
-  // Authenticated with wallet - Phantom-like UI
+  // Authenticated with wallet - TRAPANI redesigned UI
   return (
     <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-lg">
+      <div className="mx-auto max-w-lg pb-20">
         {/* Wallet Header */}
         <WalletHeader 
           address={address} 
@@ -156,71 +172,126 @@ const Index = () => {
           onLogout={logout}
         />
 
-        {/* Prominent Buy Button */}
-        <div className="px-6 py-4 space-y-3">
-          <Button 
-            onClick={handleFund}
-            size="lg"
-            className="w-full bg-gradient-primary hover:opacity-90 transition-opacity shadow-glow text-lg font-semibold h-14"
-          >
-          <CreditCard className="mr-2 h-6 w-6" />
-            Buy Crypto with Card
-          </Button>
-          <p className="text-xs text-center text-muted-foreground">
-            Powered by MoonPay • Test Mode Active
-          </p>
+        {/* Main Content */}
+        <div className="px-4 space-y-4 mt-4">
+          {/* TRAPANI Chart */}
+          <TrapaniChart />
+
+          {/* Primary CTA Stack */}
+          <PrimaryCTAStack
+            address={address}
+            onBuySOL={handleFund}
+            onSwap={() => setSwapOpen(true)}
+          />
+
+          {/* Balances Card */}
+          <TrapaniBalances address={address} />
+
+          {/* Status/Risk Bar */}
+          <StatusBar />
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-auto py-4"
+              onClick={() => setSendOpen(true)}
+            >
+              <Send className="h-5 w-5" />
+              <span className="text-xs">Send</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-auto py-4"
+              onClick={() => setReceiveOpen(true)}
+            >
+              <QrCode className="h-5 w-5" />
+              <span className="text-xs">Receive</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="flex flex-col items-center gap-2 h-auto py-4"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <Settings className="h-5 w-5" />
+              <span className="text-xs">Settings</span>
+            </Button>
+          </div>
+
+          {/* Activity Tab */}
+          <div className="pt-4">
+            <h3 className="text-lg font-semibold mb-3 px-2">Recent Activity</h3>
+            <ActivityTab />
+          </div>
         </div>
 
-        {/* Swap Panel - Direct Jupiter API integration with Privy */}
-        <SwapPanel
-          onSwapResult={({ signature }) => {
-            console.log('🔄 Swap completed, refreshing balance...', signature);
-            refetchBalance();
-          }}
-        />
-
-        {/* Action Buttons */}
-        <ActionButtons
-          onBuy={handleFund}
-          onSend={() => setSendOpen(true)}
-          onReceive={() => setReceiveOpen(true)}
-          onSwap={() => {}}
-        />
-
-        {/* Tabs */}
-        <Tabs defaultValue="tokens" className="mt-4">
-          <TabsList className="w-full grid grid-cols-3 mx-6" style={{ width: 'calc(100% - 3rem)' }}>
-            <TabsTrigger value="tokens">Tokens</TabsTrigger>
-            <TabsTrigger value="nfts">NFTs</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="tokens" className="mt-4">
-            <TokenList address={address} />
-          </TabsContent>
-          
-          <TabsContent value="nfts" className="mt-4">
-            <div className="px-6 py-12 text-center">
-              <Image className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-muted-foreground mb-1">No NFTs yet</p>
-              <p className="text-sm text-muted-foreground">
-                Your collectibles will appear here
-              </p>
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="activity" className="mt-4">
-            <ActivityTab />
-          </TabsContent>
-        </Tabs>
-
         {/* Modals */}
+        <Dialog open={swapOpen} onOpenChange={setSwapOpen}>
+          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
+            <DialogHeader>
+              <DialogTitle>Swap SOL → $TRAPANI</DialogTitle>
+            </DialogHeader>
+            <SwapPanel
+              onSwapResult={({ signature }) => {
+                console.log('🔄 Swap completed, refreshing balance...', signature);
+                refetchBalance();
+                setSwapOpen(false);
+                toast.success('Swapped! You now hold $TRAPANI', {
+                  description: 'Check your balance above'
+                });
+              }}
+            />
+          </DialogContent>
+        </Dialog>
+
         <Dialog open={sendOpen} onOpenChange={setSendOpen}>
           <DialogContent className="sm:max-w-md bg-gradient-card border-border">
             <DialogHeader>
               <DialogTitle>Send SOL</DialogTitle>
             </DialogHeader>
             <SendSolForm onSuccess={() => setSendOpen(false)} />
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <DialogContent className="sm:max-w-md bg-gradient-card border-border">
+            <DialogHeader>
+              <DialogTitle>Settings</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <p className="text-sm text-muted-foreground mb-1">Logged in as</p>
+                <p className="font-medium">{user?.email?.address || 'Unknown'}</p>
+              </div>
+              <div className="pt-4 border-t border-border">
+                <p className="text-sm text-muted-foreground mb-1">Network</p>
+                <p className="font-medium">Solana Mainnet</p>
+              </div>
+              <div className="pt-4 border-t border-border space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    logout();
+                  }}
+                >
+                  Sign Out
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full text-destructive hover:text-destructive"
+                  onClick={handleRestart}
+                >
+                  Reset Wallet
+                </Button>
+              </div>
+              <div className="pt-4 border-t border-border text-xs text-muted-foreground space-y-1">
+                <p>• Non-custodial wallet</p>
+                <p>• You control your private keys</p>
+                <p>• Not investment advice</p>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
@@ -232,14 +303,26 @@ const Index = () => {
 
         <MoonPayModal
           open={showMoonPay}
-          onOpenChange={closeFundingFlow}
+          onOpenChange={(open) => {
+            closeFundingFlow();
+            // Prompt swap after successful MoonPay purchase
+            if (!open && balance >= MIN_SOL_AMOUNT) {
+              setTimeout(() => {
+                toast.success('SOL received!', {
+                  description: 'Ready to swap to $TRAPANI?',
+                  action: {
+                    label: 'Swap Now',
+                    onClick: () => setSwapOpen(true)
+                  },
+                  duration: 10000
+                });
+              }, 1000);
+            }
+          }}
           walletAddress={fundingAddress}
           onDepositComplete={() => {
             console.log('💰 Deposit completed, refreshing balance...');
             refetchBalance();
-            toast.success('Checking for deposit...', {
-              description: 'Balance will update shortly'
-            });
           }}
         />
 

@@ -164,17 +164,14 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const inputUsdValue = parseFloat(inputAmount || '0') * solPrice;
 
   return (
-    <Card className="mx-6 mb-4 p-6 space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold mb-1">Swap SOL → TRAPANI</h2>
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Balance: {balance.toFixed(4)} SOL
-          </p>
-          <div className="text-xs text-muted-foreground flex gap-3">
-            <span>SOL: ${solPrice.toFixed(2)}</span>
-            <span>TRAPANI: ${trapaniPrice.toFixed(6)}</span>
-          </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Balance: {balance.toFixed(4)} SOL
+        </p>
+        <div className="text-xs text-muted-foreground flex gap-3">
+          <span>SOL: ${solPrice.toFixed(2)}</span>
+          <span>TRAPANI: ${trapaniPrice.toFixed(6)}</span>
         </div>
       </div>
 
@@ -250,6 +247,6 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
           'Swap Now'
         )}
       </Button>
-    </Card>
+    </div>
   );
 }
