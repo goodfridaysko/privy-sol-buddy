@@ -6,13 +6,10 @@ import { ArrowDown, Loader2 } from 'lucide-react';
 import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/config/swap';
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
-import { buyTokenWithSOL } from '@/lib/pumpPortal';
 import { toast } from 'sonner';
 import { usePrivy } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
-import { VersionedTransaction, PublicKey } from '@solana/web3.js';
-import { supabase } from '@/integrations/supabase/client';
-import bs58 from 'bs58';
+import { VersionedTransaction, Connection } from '@solana/web3.js';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -25,6 +22,8 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   // Get first Solana wallet (embedded wallet)
   const solanaWallet = wallets[0];
   const address = solanaWallet?.address;
+  
+  const connection = new Connection('https://api.mainnet-beta.solana.com', 'confirmed');
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -82,62 +81,50 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       
       toast.info('Building swap transaction...');
 
-      // Get transaction bytes from PumpPortal
-      const txBytes = await buyTokenWithSOL(
-        address,
-        TRAPANI_MINT,
-        amountSOL,
-        SLIPPAGE_PERCENT,
-        PRIORITY_FEE
-      );
-
-      console.log('[SwapPanel] Transaction bytes received:', {
-        length: txBytes.length,
-        first20Bytes: Array.from(txBytes.slice(0, 20)),
+      // Get serialized transaction from PumpPortal
+      const response = await fetch('https://pumpportal.fun/api/trade-local', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          publicKey: address,
+          action: 'buy',
+          mint: TRAPANI_MINT,
+          amount: amountSOL,
+          denominatedInSol: 'true',
+          slippage: SLIPPAGE_PERCENT,
+          priorityFee: PRIORITY_FEE,
+          pool: 'auto'
+        }),
       });
 
-      // Deserialize the transaction
-      const tx = VersionedTransaction.deserialize(txBytes);
-      console.log('[SwapPanel] Transaction deserialized, version:', tx.version);
-
-      toast.info('Please approve in Privy wallet...');
-      
-      // Create wallet adapter compatible object
-      const walletAdapter = {
-        publicKey: new PublicKey(address),
-        signTransaction: async (transaction: VersionedTransaction) => {
-          const serialized = transaction.serialize();
-          const result = await solanaWallet.signTransaction({ transaction: serialized });
-          return VersionedTransaction.deserialize(result.signedTransaction);
-        }
-      };
-
-      // Sign transaction using the adapter
-      console.log('[SwapPanel] Signing transaction...');
-      const signedTx = await walletAdapter.signTransaction(tx);
-      console.log('[SwapPanel] Transaction signed');
-
-      // Serialize and send via edge function
-      const signedTxBase64 = Buffer.from(signedTx.serialize()).toString('base64');
-      
-      toast.info('Sending transaction...');
-      console.log('[SwapPanel] Sending via edge function...');
-
-      const { data: sendResult, error: sendError } = await supabase.functions.invoke(
-        'send-solana-transaction',
-        {
-          body: {
-            signedTransaction: signedTxBase64
-          }
-        }
-      );
-
-      if (sendError) {
-        console.error('[SwapPanel] Send error:', sendError);
-        throw new Error(sendError.message || 'Failed to send transaction');
+      if (!response.ok) {
+        throw new Error(`PumpPortal API failed: ${response.status}`);
       }
 
-      const signature = sendResult.signature;
+      const txData = await response.arrayBuffer();
+      const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
+      
+      console.log('[SwapPanel] Transaction received:', {
+        version: transaction.version,
+      });
+
+      toast.info('Please approve transaction in wallet...');
+      
+      // Sign transaction with Privy wallet
+      const { signedTransaction } = await solanaWallet.signTransaction({
+        transaction: transaction.serialize()
+      });
+      
+      console.log('[SwapPanel] Transaction signed, sending to network...');
+      
+      // Send signed transaction
+      const signature = await connection.sendRawTransaction(signedTransaction, {
+        skipPreflight: false,
+        maxRetries: 3
+      });
+
       toast.success('Swap successful!');
       console.log('[SwapPanel] Transaction completed:', signature);
 
