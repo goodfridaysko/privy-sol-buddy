@@ -7,10 +7,10 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
+import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
-import bs58 from 'bs58';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -18,7 +18,7 @@ interface SwapPanelProps {
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { wallets } = useWallets();
-  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { signTransaction } = useSignTransaction();
   const { address, ready: walletReady } = useEmbeddedSolWallet();
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
@@ -116,17 +116,31 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
 
       toast.info('Please approve transaction...');
       
-      // Sign and send transaction using Privy's signAndSendTransaction hook
-      // This uses the configured Solana RPC from PrivyProvider
-      const receipt = await signAndSendTransaction({
+      // Sign transaction using Privy's useSignTransaction hook
+      // This properly handles VersionedTransaction from external APIs
+      const { signedTransaction } = await signTransaction({
         transaction: transaction.serialize(),
         wallet: embeddedWallet
       });
       
-      // Convert signature from Uint8Array to base58 string if needed
-      const signature = typeof receipt.signature === 'string' 
-        ? receipt.signature 
-        : bs58.encode(receipt.signature);
+      console.log('[SwapPanel] Transaction signed, sending via backend...');
+      toast.info('Sending transaction...');
+      
+      // Send via backend edge function
+      const { data: result, error: sendError } = await supabase.functions.invoke(
+        'send-solana-transaction',
+        {
+          body: {
+            signedTransaction: Buffer.from(signedTransaction).toString('base64')
+          }
+        }
+      );
+
+      if (sendError) {
+        throw new Error(sendError.message || 'Failed to send transaction');
+      }
+
+      const signature = result.signature;
       console.log('[SwapPanel] Transaction sent:', signature);
 
       toast.success('Swap successful!');
