@@ -1,28 +1,23 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { ArrowDown, Loader2 } from 'lucide-react';
 import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/config/swap';
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { usePrivy } from '@privy-io/react-auth';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
-import { VersionedTransaction, Connection } from '@solana/web3.js';
-import bs58 from 'bs58';
+import { VersionedTransaction } from '@solana/web3.js';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
-  const { wallets } = useWallets();
+  const { user } = usePrivy();
   const { address, ready: walletReady } = useEmbeddedSolWallet();
-  
-  // Get Solana wallet with signTransaction method
-  const solanaWallet = wallets.find(w => w.address === address);
   
   const { data: balance = 0, refetch: refetchBalance } = useBalance(address);
   const { sol: solPrice, trapani: trapaniPrice } = usePrices();
@@ -34,8 +29,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     walletReady,
     hasAddress: !!address,
     address,
-    hasSolanaWallet: !!solanaWallet,
-    walletsCount: wallets.length
+    hasUser: !!user
   });
 
   const handleSwap = async () => {
@@ -45,9 +39,9 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       return;
     }
 
-    if (!solanaWallet) {
-      toast.error('Solana wallet not found');
-      console.error('[SwapPanel] No Solana wallet with signTransaction');
+    if (!user) {
+      toast.error('User not authenticated');
+      console.error('[SwapPanel] No user found');
       return;
     }
 
@@ -100,23 +94,33 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       const txData = await response.arrayBuffer();
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
       
-      console.log('[SwapPanel] Transaction received, signing...');
+      console.log('[SwapPanel] Transaction received, signing via Privy...');
       toast.info('Please approve transaction...');
 
-      // Sign transaction using Privy Solana wallet's signTransaction
-      const signedResult = await solanaWallet.signTransaction({
-        transaction: transaction.serialize()
-      });
+      // Get Solana provider from Privy user
+      const solanaProvider = await (user as any).solana?.();
+      if (!solanaProvider) {
+        throw new Error('Solana provider not available');
+      }
+
+      // Sign transaction using Privy's embedded wallet
+      const signedTx = await solanaProvider.signTransaction(transaction);
       
-      console.log('[SwapPanel] Transaction signed, sending...');
+      console.log('[SwapPanel] Transaction signed, encoding...');
       toast.info('Sending transaction...');
       
-      // Send signed transaction to Solana
+      // Convert signed transaction to base64
+      const txBytes = signedTx.serialize();
+      const base64Tx = Buffer.from(txBytes).toString('base64');
+      
+      console.log('[SwapPanel] Sending to edge function...');
+      
+      // Send signed transaction via edge function
       const { data: result, error: sendError } = await supabase.functions.invoke(
         'send-solana-transaction',
         {
           body: {
-            signedTransaction: bs58.encode(signedResult.signedTransaction)
+            signedTransaction: base64Tx
           }
         }
       );
@@ -235,7 +239,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !walletReady || !solanaWallet || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !walletReady || !user || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
