@@ -8,6 +8,7 @@ import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { buyTokenWithSOL } from '@/lib/pumpPortal';
 import { toast } from 'sonner';
+import { usePrivy } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 import { Connection, VersionedTransaction } from '@solana/web3.js';
 
@@ -16,9 +17,10 @@ interface SwapPanelProps {
 }
 
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
+  const { ready, authenticated } = usePrivy();
   const { wallets } = useWallets();
   
-  // Get first Solana wallet
+  // Get first Solana wallet (embedded wallet)
   const solanaWallet = wallets[0];
   const address = solanaWallet?.address;
   
@@ -31,9 +33,24 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
+  console.log('[SwapPanel] Wallet state:', {
+    ready,
+    authenticated,
+    hasWallet: !!solanaWallet,
+    address,
+    walletsCount: wallets.length
+  });
+
   const handleSwap = async () => {
+    if (!ready || !authenticated) {
+      toast.error('Please wait for wallet to be ready');
+      console.error('[SwapPanel] Wallet not ready:', { ready, authenticated });
+      return;
+    }
+
     if (!address || !solanaWallet || !inputAmount) {
       toast.error('Missing wallet or amount');
+      console.error('[SwapPanel] Missing data:', { address, hasWallet: !!solanaWallet, inputAmount });
       return;
     }
 
@@ -230,7 +247,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !address || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !ready || !authenticated || !address || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
