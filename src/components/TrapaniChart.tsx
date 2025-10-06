@@ -61,36 +61,14 @@ export function TrapaniChart() {
     const max = Math.max(...chartData);
     const min = Math.min(...chartData);
     const range = max - min;
+    
+    // Determine color based on price change
+    const isPositive = priceChange >= 0;
+    const strokeColor = isPositive ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)'; // green-500 : red-500
 
     return (
-      <svg viewBox="0 0 100 40" className="w-full h-32" preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0" />
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="0.5" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-        </defs>
-        
-        {/* Area under the line */}
-        <path
-          d={`M 0,40 ${chartData
-            .map((price, i) => {
-              const x = (i / (chartData.length - 1)) * 100;
-              const y = 35 - ((price - min) / range) * 30;
-              return `L ${x},${y}`;
-            })
-            .join(' ')} L 100,40 Z`}
-          fill="url(#chartGradient)"
-        />
-        
-        {/* Line with glow effect */}
+      <svg viewBox="0 0 100 40" className="w-full h-28" preserveAspectRatio="none">
+        {/* Thin line */}
         <path
           d={`M ${chartData
             .map((price, i) => {
@@ -100,12 +78,11 @@ export function TrapaniChart() {
             })
             .join(' L ')}`}
           fill="none"
-          stroke="hsl(var(--primary))"
+          stroke={strokeColor}
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          filter="url(#glow)"
-          className="transition-all duration-300 ease-in-out"
+          className="transition-all duration-500 ease-in-out"
         />
       </svg>
     );
@@ -122,8 +99,10 @@ export function TrapaniChart() {
             <h2 className="text-sm font-medium text-muted-foreground">$TRAPANI</h2>
             <div className="flex items-baseline gap-3 mt-1">
               <p className="text-3xl font-bold">${currentPrice.toFixed(6)}</p>
-              <div className={`flex items-center gap-1 text-sm font-medium ${
-                isPositive ? 'text-green-500' : 'text-red-500'
+              <div className={`flex items-center gap-1 px-2 py-1 rounded text-sm font-medium ${
+                isPositive 
+                  ? 'bg-green-500/10 text-green-500' 
+                  : 'bg-red-500/10 text-red-500'
               }`}>
                 {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                 {isPositive ? '+' : ''}{priceChange.toFixed(2)}%
