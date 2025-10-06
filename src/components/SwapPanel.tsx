@@ -3,12 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ArrowDown, Loader2 } from 'lucide-react';
-import { TRAPANI_MINT, SLIPPAGE_PERCENT, MIN_SOL_AMOUNT } from '@/config/swap';
+import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/config/swap';
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
+import { VersionedTransaction } from '@solana/web3.js';
+import bs58 from 'bs58';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
@@ -63,34 +65,68 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
     setIsSwapping(true);
 
     try {
-      console.log('[SwapPanel] Starting swap via backend...');
+      console.log('[SwapPanel] Starting PumpPortal swap...');
       console.log('[SwapPanel] Request params:', {
         publicKey: address,
-        inputMint: 'SOL',
-        outputMint: TRAPANI_MINT,
+        action: 'buy',
+        mint: TRAPANI_MINT,
         amount: amountSOL,
-        slippageBps: SLIPPAGE_PERCENT * 100
+        denominatedInSol: 'true',
+        slippage: SLIPPAGE_PERCENT,
+        priorityFee: PRIORITY_FEE,
+        pool: 'auto'
       });
       
-      toast.info('Preparing swap transaction...');
+      toast.info('Building swap transaction...');
 
-      // Instead of building transaction locally, send swap request to backend
-      // Backend will: build tx, sign it (if needed), and submit to Solana
-      const { data: result, error: swapError } = await supabase.functions.invoke(
-        'jupiter-swap',
+      // Get serialized transaction from PumpPortal - EXACTLY as in docs
+      const response = await fetch('https://pumpportal.fun/api/trade-local', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          publicKey: address,
+          action: 'buy',
+          mint: TRAPANI_MINT,
+          amount: amountSOL,
+          denominatedInSol: 'true',
+          slippage: SLIPPAGE_PERCENT,
+          priorityFee: PRIORITY_FEE,
+          pool: 'auto'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`PumpPortal API failed: ${response.status}`);
+      }
+
+      const txData = await response.arrayBuffer();
+      const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
+      
+      console.log('[SwapPanel] Transaction received from PumpPortal');
+
+      toast.info('Please approve transaction in wallet...');
+      
+      // Sign using embedded wallet's signTransaction method directly
+      // @ts-ignore - wallet object has signTransaction
+      const signedTxBytes = await embeddedWallet.signTransaction(transaction.serialize());
+      
+      console.log('[SwapPanel] Transaction signed, sending...');
+      toast.info('Sending transaction...');
+      
+      // Send signed transaction to backend
+      const { data: result, error: sendError } = await supabase.functions.invoke(
+        'send-solana-transaction',
         {
           body: {
-            publicKey: address,
-            inputMint: 'So11111111111111111111111111111111111111112', // SOL
-            outputMint: TRAPANI_MINT,
-            amount: Math.floor(amountSOL * 1e9), // Convert to lamports
-            slippageBps: SLIPPAGE_PERCENT * 100
+            signedTransaction: bs58.encode(signedTxBytes)
           }
         }
       );
 
-      if (swapError) {
-        throw new Error(swapError.message || 'Swap failed');
+      if (sendError) {
+        throw new Error(sendError.message || 'Failed to send transaction');
       }
 
       const signature = result.signature;
@@ -187,14 +223,19 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
         </div>
       </div>
 
+      {/* Swap details */}
       <div className="p-3 rounded-lg bg-muted/20 space-y-1 text-xs">
         <div className="flex justify-between">
           <span className="text-muted-foreground">Slippage</span>
           <span>{SLIPPAGE_PERCENT}%</span>
         </div>
         <div className="flex justify-between">
+          <span className="text-muted-foreground">Priority Fee</span>
+          <span>{PRIORITY_FEE} SOL</span>
+        </div>
+        <div className="flex justify-between">
           <span className="text-muted-foreground">Router</span>
-          <span>Jupiter (Backend)</span>
+          <span>PumpPortal (Auto)</span>
         </div>
       </div>
 
