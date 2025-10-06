@@ -6,26 +6,19 @@ import { TRAPANI_MINT, SLIPPAGE_PERCENT, PRIORITY_FEE, MIN_SOL_AMOUNT } from '@/
 import { useBalance } from '@/hooks/useBalance';
 import { usePrices } from '@/hooks/usePrices';
 import { toast } from 'sonner';
-import { useWallets, useSignTransaction } from '@privy-io/react-auth/solana';
+import { useWallets } from '@privy-io/react-auth/solana';
 import { useEmbeddedSolWallet } from '@/hooks/useEmbeddedSolWallet';
 import { supabase } from '@/integrations/supabase/client';
 import { VersionedTransaction } from '@solana/web3.js';
+import { signWithPrivy } from '@/lib/privySign';
+import { bytesToB64 } from '@/polyfills';
 
 interface SwapPanelProps {
   onSwapResult?: (result: { signature: string; inAmount: number }) => void;
 }
 
-// Helper to convert base64 to Uint8Array without Buffer
-const b64ToBytes = (b64: string): Uint8Array =>
-  Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-
-// Helper to convert Uint8Array to base64 without Buffer
-const bytesToB64 = (bytes: Uint8Array): string =>
-  btoa(String.fromCharCode(...bytes));
-
 export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const { wallets } = useWallets();
-  const { signTransaction } = useSignTransaction();
   const { address, ready: walletReady } = useEmbeddedSolWallet();
   
   // Get the embedded Solana wallet for signing
@@ -37,13 +30,16 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
   const [inputAmount, setInputAmount] = useState('0.01');
   const [isSwapping, setIsSwapping] = useState(false);
 
+  // Guard: Only enable swap when wallet is ready and present
+  const isReady = walletReady && !!embeddedWallet && !!address;
+
   console.log('[SwapPanel] Wallet state:', {
     walletReady,
     hasAddress: !!address,
     address,
     hasEmbeddedWallet: !!embeddedWallet,
     walletsCount: wallets.length,
-    hasSignTransaction: !!signTransaction
+    isReady
   });
 
   const handleSwap = async () => {
@@ -108,24 +104,18 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       const txData = await response.arrayBuffer();
       const transaction = VersionedTransaction.deserialize(new Uint8Array(txData));
       
-      console.log('[SwapPanel] Transaction received, signing with Privy...');
+      console.log('[SwapPanel] Transaction received, signing with Privy embedded wallet...');
       toast.info('Please approve transaction...');
 
-      // Sign transaction using Privy's useSignTransaction hook
-      // Pass the serialized transaction as Uint8Array (no Buffer needed)
-      const txBytes = transaction.serialize();
-      console.log('[SwapPanel] Transaction serialized, size:', txBytes.length, 'bytes');
-      
-      const { signedTransaction } = await signTransaction({
-        transaction: txBytes,
-        wallet: embeddedWallet
-      });
+      // Sign transaction using Privy's embedded wallet
+      // This will open the Privy approval modal
+      const signedBytes = await signWithPrivy(transaction, embeddedWallet);
       
       console.log('[SwapPanel] Transaction signed successfully');
       toast.info('Sending transaction...');
       
-      // Convert signed transaction bytes to base64 using web APIs (no Buffer)
-      const base64Tx = bytesToB64(signedTransaction);
+      // Convert signed transaction bytes to base64 (no Buffer!)
+      const base64Tx = bytesToB64(signedBytes);
       
       console.log('[SwapPanel] Sending to edge function...');
       
@@ -253,7 +243,7 @@ export function SwapPanel({ onSwapResult }: SwapPanelProps) {
       {/* Swap button */}
       <Button
         onClick={handleSwap}
-        disabled={isSwapping || !walletReady || !embeddedWallet || !inputAmount || parseFloat(inputAmount) <= 0}
+        disabled={isSwapping || !isReady || !inputAmount || parseFloat(inputAmount) <= 0}
         className="w-full"
       >
         {isSwapping ? (
